@@ -44,7 +44,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     Clean the dataset following the documented methodology.
     
     This function:
-    - Drops exact duplicates
+    - Drops repeated customer IDs (including exact duplicate rows)
     - Standardizes categorical labels
     - Treats implausible ages as missing
     - Treats negative transaction counts as missing
@@ -54,10 +54,12 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     print("\n=== Data Cleaning ===")
     df = df.copy()
     
-    # 1. Drop exact duplicates
+    # 1. Enforce one record per customer. Some injected duplicate rows are
+    # subsequently altered by other quality injections, so exact-row deduping
+    # alone would leave conflicting records for the same customer ID.
     before = len(df)
-    df = df.drop_duplicates()
-    print(f"Dropped {before - len(df):,} duplicate rows -> {len(df):,} remaining")
+    df = df.drop_duplicates(subset=["Customer_ID"], keep="first")
+    print(f"Dropped {before - len(df):,} duplicate customer records -> {len(df):,} remaining")
     
     # 2. Standardize Customer_Segment labels
     segment_fix_map = {
