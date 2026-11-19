@@ -132,6 +132,12 @@ python scripts/train_pipeline.py
 ```
 
 The pipeline writes the trained model, cleaned customer cohort, held-out test predictions and full-population customer scores to the repository's `models/` and `data/processed/` directories.
+The pipeline writes:
+- `models/logistic_regression_pipeline.joblib` — selected trained model and evaluation metadata
+- `data/processed/churn_predictions.csv` — held-out test predictions for independent evaluation
+- `data/processed/churn_customer_scores.csv` — scores for the complete cleaned customer cohort, used by the retention command centre
+- `data/processed/churn_customers_clean.csv` — cleaned customer profiles
+
 This script:
 - Loads and validates data
 - Cleans data (removes duplicates, fixes outliers)
