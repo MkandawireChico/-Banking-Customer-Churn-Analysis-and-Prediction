@@ -208,7 +208,19 @@ def main():
     )
     print(comparison_df.round(4))
     
-    # 7. Train selected model (Logistic Regression for interpretability)
+    # 7. Create a validation split from training data for threshold scenarios.
+    # The independent test set remains untouched for final performance reporting.
+    from sklearn.model_selection import train_test_split
+    X_fit, X_validation, y_fit, y_validation = train_test_split(
+        X_train, y_train, test_size=0.20, random_state=args.random_state, stratify=y_train
+    )
+    validation_pipeline = ChurnModelPipeline(
+        model_type="logistic", random_state=args.random_state, class_weight="balanced"
+    )
+    validation_pipeline.fit(X_fit, y_fit, numerical_cols, categorical_cols)
+    validation_proba = validation_pipeline.predict_proba(X_validation)
+
+    # 8. Refit the production candidate on the complete training partition.
     print("\n=== Training Selected Model (Logistic Regression) ===")
     selected_pipeline = ChurnModelPipeline(
         model_type="logistic",
@@ -228,11 +240,34 @@ def main():
     for metric, value in test_metrics.items():
         print(f"  {metric}: {value:.4f}")
     
-    # 9. Threshold analysis
-    print("\n=== Threshold Analysis ===")
-    thresholds = np.arange(0.30, 0.71, 0.05)
-    threshold_df = evaluator.threshold_analysis(y_test, y_proba, thresholds)
+    # 9. Threshold scenarios are evaluated on validation data, not the final test set.
+    print("\n=== Validation-Set Threshold Analysis ===")
+    thresholds = np.arange(0.10, 0.91, 0.05)
+    threshold_df = evaluator.threshold_analysis(y_validation, validation_proba, thresholds)
     print(threshold_df.round(4))
+
+    # 10. Cross-validation is restricted to training data; preprocessing is inside the pipeline.
+    print("\n=== Training-Only Stratified Cross-Validation ===")
+    cv_roc_auc = evaluator.cross_validate(
+        selected_pipeline.pipeline, X_train, y_train, cv=5, scoring="roc_auc"
+    )
+    cv_average_precision = evaluator.cross_validate(
+        selected_pipeline.pipeline, X_train, y_train, cv=5, scoring="average_precision"
+    )
+    print(f"ROC-AUC: {cv_roc_auc['mean']:.4f} +/- {cv_roc_auc['std']:.4f}")
+    print(f"Average precision: {cv_average_precision['mean']:.4f} +/- {cv_average_precision['std']:.4f}")
+
+    # 11. Final-test diagnostics at the unchanged 0.50 operating threshold.
+    test_confusion, confusion_counts = evaluator.confusion_matrix_at_threshold(
+        y_test, y_proba, threshold=0.50
+    )
+    from sklearn.metrics import precision_recall_curve
+    pr_precision, pr_recall, pr_thresholds = precision_recall_curve(y_test, y_proba[:, 1])
+    subgroup_metrics = {}
+    for group_column in ["Branch_Location", "Customer_Segment"]:
+        subgroup_metrics[group_column] = evaluator.subgroup_performance(
+            y_test, y_pred, X_test[group_column], group_name=group_column, min_group_size=50
+        ).to_dict(orient="records")
     
     # 10. Capacity-constrained analysis
     print("\n=== Capacity-Constrained Analysis ===")
@@ -260,9 +295,28 @@ def main():
     
     metadata = {
         "test_metrics": test_metrics,
+        "test_confusion_matrix": test_confusion.tolist(),
+        "test_confusion_counts": confusion_counts,
+        "pr_curve": {
+            "precision": pr_precision.tolist(),
+            "recall": pr_recall.tolist(),
+            "thresholds": pr_thresholds.tolist(),
+        },
         "threshold_analysis": threshold_df.to_dict(),
+        "threshold_analysis_source": "Validation split drawn from training data; final test set not used for threshold scenarios.",
+        "cross_validation": {
+            "roc_auc": {key: (value.tolist() if isinstance(value, np.ndarray) else float(value) if isinstance(value, (np.floating, float)) else value) for key, value in cv_roc_auc.items()},
+            "average_precision": {key: (value.tolist() if isinstance(value, np.ndarray) else float(value) if isinstance(value, (np.floating, float)) else value) for key, value in cv_average_precision.items()},
+        },
+        "subgroup_metrics": subgroup_metrics,
         "capacity_analysis": capacity_df.to_dict(),
         "calibration_ece": float(calibration_results['ece']),
+        "calibration_curve": {
+            "prob_true": calibration_results["prob_true"].tolist(),
+            "prob_pred": calibration_results["prob_pred"].tolist(),
+            "bin_count": calibration_results["bin_count"].tolist(),
+            "bin_edges": calibration_results["bin_edges"].tolist(),
+        },
         "feature_definitions": get_feature_definitions(),
         "data_info": {
             "n_train": len(X_train),
