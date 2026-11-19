@@ -147,8 +147,8 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
         return X
     
     def get_feature_names_out(self, input_features=None):
-        """Get output feature names for scikit-learn compatibility."""
-        return [
+        """Return preserved input columns followed by engineered feature names."""
+        engineered = [
             "Average_Transaction_Value",
             "Transaction_Activity_Index",
             "Digital_Banking_Usage",
@@ -158,8 +158,10 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
             "Products_per_Tenure",
             "Recent_Activity_Flag",
             "High_Value_Customer_Flag",
-            "Low_Engagement_Flag"
+            "Low_Engagement_Flag",
         ]
+        original = list(input_features) if input_features is not None else []
+        return np.asarray(original + [name for name in engineered if name not in original], dtype=object)
 
 
 def get_feature_definitions() -> Dict[str, Dict[str, str]]:
@@ -191,7 +193,7 @@ def get_feature_definitions() -> Dict[str, Dict[str, str]]:
         "Complaint_Rate": {
             "formula": "Number_of_Complaints / (Account_Tenure_Months / 12)",
             "meaning": "Complaints per year of relationship - normalizes for relationship length",
-            "edge_cases": "Tenure clipped at最低 0.1 years to prevent division by zero",
+            "edge_cases": "Tenure clipped at a minimum of 0.1 years to prevent division by zero",
             "availability": "Available at prediction time"
         },
         "Engagement_Index": {
