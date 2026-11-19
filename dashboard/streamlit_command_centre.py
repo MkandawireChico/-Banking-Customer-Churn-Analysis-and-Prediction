@@ -50,7 +50,7 @@ def money(value):
 def overview(data, metadata):
     st.title("Banking Customer Retention Command Centre")
     st.caption("Full-population customer scoring • Portfolio intelligence • Retention prioritisation")
-    st.caption("Portfolio summaries use the labelled customer cohort; model validation metrics are calculated separately on the held-out test set.")
+    st.caption("Portfolio risk counts use full-population scores; model validation metrics are calculated separately on the held-out test set. Full-population scores are for prioritisation, not independent model evaluation.")
     if data is None or data.empty:
         st.warning("Analytics exports are missing. Run scripts/train_pipeline.py from the repository root.")
         return
