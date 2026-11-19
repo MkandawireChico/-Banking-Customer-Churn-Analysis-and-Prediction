@@ -282,11 +282,10 @@ def main():
         "Predicted_Churn_0.50": y_pred,
     })
     
-    # Add risk bands
-    predictions_df["Risk_Band"] = pd.cut(
-        predictions_df["Churn_Probability"],
-        bins=[0, 0.33, 0.66, 1.0],
-        labels=["Low Risk", "Medium Risk", "High Risk"]
+    # Use the same inclusive boundaries as the retention queue and prediction app.
+    risk_recommender = RetentionRecommender()
+    predictions_df["Risk_Band"] = predictions_df["Churn_Probability"].apply(
+        risk_recommender.assign_risk_band
     )
     
     predictions_path = output_dir.parent / "data" / "processed" / "churn_predictions.csv"
@@ -296,7 +295,7 @@ def main():
     
     # 13. Retention analysis
     print("\n=== Retention Analysis ===")
-    recommender = RetentionRecommender()
+    recommender = risk_recommender
     retention_report = generate_retention_report(predictions_df)
     print(retention_report)
     
