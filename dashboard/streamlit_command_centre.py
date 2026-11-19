@@ -1,6 +1,7 @@
-"""Interactive banking customer retention command centre."""
+"""Premium interactive banking customer retention command centre."""
 from pathlib import Path
 import sys
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -9,11 +10,69 @@ import joblib
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+
 from src.modeling import ChurnModelPipeline
 from src.retention import RetentionRecommender
 
-st.set_page_config(page_title="Banking Customer Retention Command Centre", page_icon="🏦", layout="wide")
+
+st.set_page_config(
+    page_title="Nyanja | Customer Intelligence",
+    page_icon="🏦",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 NAVY = "#142B4A"
+BLUE = "#2F6B9A"
+TEAL = "#2B8C82"
+GOLD = "#D7A84B"
+RED = "#C85D5D"
+MUTED = "#64748B"
+
+
+def apply_theme():
+    """Apply a restrained, consistent banking-product visual system."""
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+        html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
+        .stApp { background: #F4F7FB; }
+        [data-testid="stSidebar"] { background: #10243D; }
+        [data-testid="stSidebar"] * { color: #EAF1F8 !important; }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 8px 10px; border-radius: 8px; }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #203B5B; }
+        .block-container { padding-top: 2rem; padding-bottom: 2.5rem; max-width: 1500px; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; color: #142B4A; letter-spacing: -0.025em; }
+        h1 { font-weight: 800; }
+        [data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #E4EAF1; padding: 17px 19px; border-radius: 13px; box-shadow: 0 2px 8px rgba(20,43,74,.035); }
+        [data-testid="stMetricLabel"] { color: #64748B; font-size: .82rem; }
+        [data-testid="stMetricValue"] { color: #142B4A; font-family: 'Manrope', sans-serif; }
+        [data-testid="stDataFrame"], [data-testid="stTable"] { border: 1px solid #E4EAF1; border-radius: 12px; overflow: hidden; }
+        div[data-testid="stVerticalBlock"] div[data-testid="stAlert"] { border-radius: 10px; }
+        .hero { background: linear-gradient(115deg, #10243D 0%, #1C4266 62%, #287C83 100%); padding: 28px 32px; border-radius: 18px; color: white; margin-bottom: 22px; box-shadow: 0 12px 28px rgba(16,36,61,.12); }
+        .hero h1 { color: white !important; font-size: 2rem; margin: 0 0 7px 0; }
+        .hero p { color: #DCE8F3; margin: 0; font-size: .98rem; }
+        .eyebrow { color: #9FC6D7; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 700; margin-bottom: 9px; }
+        .section-kicker { color: #2F6B9A; text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 700; margin-bottom: 4px; }
+        .insight { background: white; border: 1px solid #E4EAF1; border-left: 4px solid #2B8C82; border-radius: 10px; padding: 14px 16px; min-height: 92px; }
+        .insight strong { color: #142B4A; display: block; margin-bottom: 4px; }
+        .insight span { color: #64748B; font-size: .88rem; }
+        .risk-pill { display: inline-block; padding: 4px 9px; border-radius: 99px; font-size: .75rem; font-weight: 700; }
+        .footer { color: #8492A6; font-size: .78rem; border-top: 1px solid #E3EAF2; padding-top: 15px; margin-top: 28px; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+@st.cache_resource
+def load_model():
+    path = ROOT / "models" / "logistic_regression_pipeline.joblib"
+    if not path.exists():
+        return None, {}
+    payload = joblib.load(path)
+    return ChurnModelPipeline.load(path), payload.get("metadata", {})
 
 
 @st.cache_data
@@ -28,9 +87,6 @@ def load_data():
         scores = pd.read_csv(score_file)
         score_scope = "Full population"
     else:
-        # Streamlit deployments may not have the optional full-population
-        # score export. Recreate it from the committed model and cleaned
-        # customer cohort so the retention queue still covers every customer.
         model, _ = load_model()
         if model is not None:
             features = customers[model.feature_names_in_]
@@ -60,142 +116,281 @@ def load_data():
     return data
 
 
-@st.cache_resource
-def load_model():
-    path = ROOT / "models" / "logistic_regression_pipeline.joblib"
-    if not path.exists():
-        return None, {}
-    payload = joblib.load(path)
-    return ChurnModelPipeline.load(path), payload.get("metadata", {})
-
-
 def money(value):
     return f"MWK {value:,.0f}"
 
 
+def page_header(kicker, title, subtitle):
+    st.markdown(
+        f'<div class="hero"><div class="eyebrow">{kicker}</div>'
+        f'<h1>{title}</h1><p>{subtitle}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def section(title, note=None):
+    st.markdown(f'<div class="section-kicker">Portfolio intelligence</div><h3>{title}</h3>',
+                unsafe_allow_html=True)
+    if note:
+        st.caption(note)
+
+
+def chart_bar(series, xlabel=None, ylabel=None, horizontal=False, percent=False):
+    fig, ax = plt.subplots(figsize=(7.2, 3.3))
+    values = series.sort_values(ascending=horizontal)
+    labels = [str(x) for x in values.index]
+    numbers = values.values * 100 if percent else values.values
+    if horizontal:
+        bars = ax.barh(labels, numbers, color=BLUE, height=0.62)
+        ax.invert_yaxis()
+        for bar, value in zip(bars, numbers):
+            ax.text(value + max(numbers.max() * .015, .2), bar.get_y() + bar.get_height()/2,
+                    f"{value:.1f}%" if percent else f"{value:,.0f}", va="center", fontsize=8, color=NAVY)
+    else:
+        bars = ax.bar(labels, numbers, color=TEAL, width=.62)
+        for bar, value in zip(bars, numbers):
+            ax.text(bar.get_x() + bar.get_width()/2, value + max(numbers.max() * .015, .2),
+                    f"{value:.1f}%" if percent else f"{value:,.0f}", ha="center", fontsize=8, color=NAVY)
+    ax.set_ylabel(ylabel or "")
+    ax.set_xlabel(xlabel or "")
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    ax.spines["bottom"].set_color("#DCE4ED")
+    ax.tick_params(axis="both", labelsize=8, colors=MUTED, length=0)
+    ax.grid(axis="x" if horizontal else "y", alpha=.18, linestyle="--")
+    ax.set_axisbelow(True)
+    fig.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
+def risk_mix(data):
+    counts = data["Risk_Band"].value_counts().reindex(
+        ["Low Risk", "Medium Risk", "High Risk"]
+    ).fillna(0)
+    fig, ax = plt.subplots(figsize=(5.8, 3.25))
+    colors = ["#5C9E83", GOLD, RED]
+    wedges, _, _ = ax.pie(
+        counts.values, labels=None, autopct="%1.1f%%", startangle=90,
+        colors=colors, pctdistance=.78,
+        wedgeprops={"width": .34, "edgecolor": "white", "linewidth": 2},
+        textprops={"fontsize": 9, "color": NAVY},
+    )
+    ax.text(0, .08, f"{len(data):,}", ha="center", va="center",
+            fontsize=21, fontweight="bold", color=NAVY)
+    ax.text(0, -.18, "CUSTOMERS", ha="center", va="center",
+            fontsize=7, color=MUTED, fontweight="bold")
+    ax.legend(wedges, [f"{k}  ·  {int(v):,}" for k, v in counts.items()],
+              loc="lower center", bbox_to_anchor=(.5, -.12), ncol=3,
+              frameon=False, fontsize=8)
+    ax.set_aspect("equal")
+    fig.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
 def overview(data, metadata):
-    st.title("Banking Customer Retention Command Centre")
-    st.caption("Portfolio intelligence • Customer risk • Retention prioritisation")
+    page_header("Nyanja Commercial Bank  /  Intelligence Suite",
+                "Customer Retention Command Centre",
+                "A decision workspace for portfolio health, emerging churn exposure and targeted retention.")
     if data is None or data.empty:
         st.warning("Analytics exports are missing. Run scripts/train_pipeline.py from the repository root.")
         return
-    score_scope = data["Score_Scope"].iloc[0] if "Score_Scope" in data else "Unknown"
-    if score_scope == "Held-out test cohort (fallback)":
-        st.info("This checkout does not yet contain full-population customer scores. The dashboard is using the held-out test cohort; rerun scripts/train_pipeline.py to populate the complete retention queue.")
+
+    score_scope = data["Score_Scope"].iloc[0]
+    if not score_scope.startswith("Full population"):
+        st.warning("This workspace is currently using the held-out test cohort, not the full customer population.")
     else:
-        st.caption("Portfolio summaries use full-population scores; held-out model metrics are reported separately. Portfolio scores support prioritisation and are not independent model evaluation.")
+        st.caption("Portfolio view: full-population scores  ·  Model validation: independent held-out test set")
+
     total = len(data)
-    churn = data["Actual_Churn"].mean()
-    high_mask = data["Risk_Band"] == "High Risk"
-    high_count = int(high_mask.sum())
-    balance_exposure = data.loc[high_mask, "Average_Monthly_Balance"].sum() if "Average_Monthly_Balance" in data else 0
-    c = st.columns(4)
-    c[0].metric("Customers scored", f"{total:,}")
-    c[1].metric("Historical churn rate", f"{churn:.1%}")
-    c[2].metric("High-risk customers", f"{high_count:,}", f"{high_count / total:.1%} of evaluated")
-    c[3].metric("High-risk customer balances", money(balance_exposure))
-    st.divider()
-    left, right = st.columns(2)
+    churn_rate = data["Actual_Churn"].mean()
+    high = data[data["Risk_Band"] == "High Risk"]
+    medium = data[data["Risk_Band"] == "Medium Risk"]
+    high_balance = high["Average_Monthly_Balance"].sum() if "Average_Monthly_Balance" in data else 0
+    avg_probability = data["Churn_Probability"].mean()
+
+    metrics = st.columns(5)
+    metrics[0].metric("Customers monitored", f"{total:,}")
+    metrics[1].metric("Historical churn", f"{churn_rate:.1%}")
+    metrics[2].metric("High-risk customers", f"{len(high):,}", f"{len(high)/total:.1%} of portfolio")
+    metrics[3].metric("High-risk balances", money(high_balance))
+    metrics[4].metric("Average risk score", f"{avg_probability:.1%}")
+
+    st.markdown("")
+    left, right = st.columns([1.12, .88], gap="large")
     with left:
-        st.subheader("Observed churn by customer segment")
+        section("Where churn is concentrated", "Observed churn rate by customer segment.")
         if "Customer_Segment" in data:
-            st.bar_chart(data.groupby("Customer_Segment", observed=True)["Actual_Churn"].mean().sort_values())
-        st.subheader("Observed churn by branch")
-        if "Branch_Location" in data:
-            st.bar_chart(data.groupby("Branch_Location", observed=True)["Actual_Churn"].mean().sort_values())
+            chart_bar(data.groupby("Customer_Segment", observed=True)["Actual_Churn"].mean(),
+                      horizontal=True, percent=True)
     with right:
-        st.subheader("Portfolio risk distribution")
-        risk = data["Risk_Band"].value_counts().reindex(["Low Risk", "Medium Risk", "High Risk"]).fillna(0)
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.pie(risk.values, labels=risk.index, autopct="%1.1f%%", startangle=90,
-               colors=["#69A88D", "#E4B65C", "#C96A67"], wedgeprops={"width": 0.42})
-        st.pyplot(fig, use_container_width=True)
-        plt.close(fig)
-        st.subheader("Churn by inactivity band")
+        section("Portfolio risk profile", "Share of customers in each model risk band.")
+        risk_mix(data)
+
+    left, right = st.columns(2, gap="large")
+    with left:
+        section("Branch performance", "Branches ranked by observed churn rate.")
+        if "Branch_Location" in data:
+            branch = data.groupby("Branch_Location", observed=True)["Actual_Churn"].mean().sort_values(ascending=False).head(8)
+            chart_bar(branch, horizontal=True, percent=True)
+    with right:
+        section("Inactivity and attrition", "Historical churn by days since last transaction.")
         if "Days_Since_Last_Transaction" in data:
-            bins = pd.cut(data["Days_Since_Last_Transaction"], [-1, 30, 60, 90, 180, float("inf")],
+            bins = pd.cut(data["Days_Since_Last_Transaction"],
+                          [-1, 30, 60, 90, 180, float("inf")],
                           labels=["0–30", "31–60", "61–90", "91–180", "180+"])
-            st.bar_chart(data.assign(Inactivity_Band=bins).groupby("Inactivity_Band", observed=True)["Actual_Churn"].mean())
+            activity = data.assign(Inactivity_Band=bins).groupby(
+                "Inactivity_Band", observed=True
+            )["Actual_Churn"].mean()
+            chart_bar(activity, percent=True)
+
+    st.markdown("")
+    section("Priority watchlist", "Highest-scoring customers for relationship-team review.")
+    watch = data.sort_values("Churn_Probability", ascending=False).head(8)
+    fields = [c for c in ["Customer_ID", "Customer_Segment", "Branch_Location",
+                           "Churn_Probability", "Risk_Band", "Days_Since_Last_Transaction",
+                           "Number_of_Complaints"] if c in watch]
+    st.dataframe(watch[fields].style.format({"Churn_Probability": "{:.1%}"}),
+                 use_container_width=True, hide_index=True)
+
     metrics = metadata.get("test_metrics", {})
     if metrics:
-        st.divider()
-        st.subheader("Held-out model validation")
-        c = st.columns(5)
-        for col, key, label in zip(c, ["roc_auc", "recall", "precision", "f1", "balanced_accuracy"],
-                                   ["ROC-AUC", "Recall", "Precision", "F1", "Balanced accuracy"]):
+        st.markdown("")
+        section("Model validation snapshot", "Independent performance on the held-out test set.")
+        cols = st.columns(5)
+        for col, key, label in zip(
+            cols, ["roc_auc", "recall", "precision", "f1", "balanced_accuracy"],
+            ["ROC-AUC", "Recall", "Precision", "F1 score", "Balanced accuracy"],
+        ):
             value = metrics.get(key)
             col.metric(label, f"{value:.1%}" if isinstance(value, (int, float)) else "—")
 
 
 def customer_intelligence(data):
-    st.title("Customer Intelligence")
+    page_header("Explore  /  Segment  /  Understand",
+                "Customer Intelligence",
+                "Slice the portfolio by branch, segment and risk to uncover behavioural patterns.")
     if data is None:
         st.warning("Run the training pipeline to generate the customer analysis exports.")
         return
-    cols = st.columns(3)
+
+    c = st.columns(4)
     segments = sorted(data["Customer_Segment"].dropna().unique()) if "Customer_Segment" in data else []
     branches = sorted(data["Branch_Location"].dropna().unique()) if "Branch_Location" in data else []
-    chosen_segments = cols[0].multiselect("Customer segment", segments, default=segments)
-    chosen_branches = cols[1].multiselect("Branch", branches, default=branches)
-    chosen_risk = cols[2].multiselect("Risk band", ["Low Risk", "Medium Risk", "High Risk"],
-                                      default=["Low Risk", "Medium Risk", "High Risk"])
+    chosen_segments = c[0].multiselect("Customer segment", segments, default=segments)
+    chosen_branches = c[1].multiselect("Branch", branches, default=branches)
+    chosen_risk = c[2].multiselect("Risk band", ["Low Risk", "Medium Risk", "High Risk"],
+                                   default=["Low Risk", "Medium Risk", "High Risk"])
+    min_probability = c[3].slider("Minimum risk score", 0, 100, 0, 5) / 100
+
     view = data.copy()
     if "Customer_Segment" in view:
         view = view[view["Customer_Segment"].isin(chosen_segments)]
     if "Branch_Location" in view:
         view = view[view["Branch_Location"].isin(chosen_branches)]
     view = view[view["Risk_Band"].isin(chosen_risk)]
-    st.caption(f"{len(view):,} customers match the selected filters.")
-    left, right = st.columns(2)
+    view = view[view["Churn_Probability"] >= min_probability]
+
+    st.metric("Customers in current view", f"{len(view):,}")
+    if view.empty:
+        st.info("No customers match these filters. Broaden the selections to see the portfolio.")
+        return
+
+    left, right = st.columns(2, gap="large")
     with left:
-        st.subheader("Churn by complaint count")
+        section("Complaints and churn")
         if "Number_of_Complaints" in view:
             temp = view.assign(Complaint_Group=view["Number_of_Complaints"].clip(upper=4))
-            st.bar_chart(temp.groupby("Complaint_Group", observed=True)["Actual_Churn"].mean())
+            chart_bar(temp.groupby("Complaint_Group", observed=True)["Actual_Churn"].mean(),
+                      percent=True)
     with right:
-        st.subheader("Churn by product holding")
+        section("Product depth and churn")
         if "Number_of_Products" in view:
-            st.bar_chart(view.groupby("Number_of_Products", observed=True)["Actual_Churn"].mean())
-    display = [x for x in ["Customer_ID", "Customer_Segment", "Branch_Location", "Churn_Probability",
-                           "Risk_Band", "Days_Since_Last_Transaction", "Number_of_Complaints",
-                           "Number_of_Products", "Average_Monthly_Balance"] if x in view]
-    st.dataframe(view[display].sort_values("Churn_Probability", ascending=False), use_container_width=True, hide_index=True)
+            chart_bar(view.groupby("Number_of_Products", observed=True)["Actual_Churn"].mean(),
+                      percent=True)
+
+    section("Customer-level portfolio explorer", "Sort by churn score and inspect the profile indicators.")
+    fields = [x for x in ["Customer_ID", "Customer_Segment", "Branch_Location",
+        "Churn_Probability", "Risk_Band", "Days_Since_Last_Transaction",
+        "Number_of_Complaints", "Number_of_Products", "Digital_Engagement_Score",
+        "Average_Monthly_Balance"] if x in view]
+    st.dataframe(view[fields].sort_values("Churn_Probability", ascending=False).style.format(
+        {"Churn_Probability": "{:.1%}", "Average_Monthly_Balance": "MWK {:,.0f}"}),
+        use_container_width=True, hide_index=True)
+    st.download_button("Export filtered customer view",
+        view[fields].to_csv(index=False).encode("utf-8"),
+        "banking_customer_intelligence.csv", "text/csv")
 
 
 def retention_prioritisation(data):
-    st.title("Retention Prioritisation")
-    st.caption("Rank customers by churn probability and review a suggested next-best action.")
-    if data is not None and "Score_Scope" in data and not data["Score_Scope"].iloc[0].startswith("Full population"):
-        st.info("The queue currently covers only the held-out test cohort. Run the latest training pipeline to generate full-population customer scores.")
+    page_header("Activate  /  Prioritise  /  Retain",
+                "Retention Prioritisation",
+                "Translate model scores into a capacity-aware action list for relationship teams.")
     if data is None:
         st.warning("Prediction exports are missing. Run the training pipeline first.")
         return
-    capacity = st.slider("Relationship-team outreach capacity", 25, 2000, 500, 25)
-    queue = RetentionRecommender().create_outreach_queue(data, capacity=capacity)
+    if not data["Score_Scope"].iloc[0].startswith("Full population"):
+        st.info("The queue currently covers only the held-out test cohort. Refresh the deployment after the full-population scoring update.")
+
+    a, b, c = st.columns([1, 1, 2])
+    capacity = a.slider("Team capacity", 25, 2000, 500, 25)
+    minimum_band = b.selectbox("Include customers", ["High and medium risk", "High risk only"])
+    include_medium = minimum_band == "High and medium risk"
+    threshold = c.slider("Minimum probability", 0, 100, 33, 1) / 100
+
+    eligible = data[data["Risk_Band"].eq("High Risk") |
+                    (data["Risk_Band"].eq("Medium Risk") if include_medium else False)]
+    eligible = eligible[eligible["Churn_Probability"] >= threshold]
+    queue = RetentionRecommender().create_outreach_queue(eligible, capacity=capacity)
     if queue.empty:
-        st.info("No medium- or high-risk customers are available in this sample.")
+        st.info("No customers meet the selected risk and capacity criteria.")
         return
-    c = st.columns(3)
-    c[0].metric("Customers in queue", f"{len(queue):,}")
-    c[1].metric("Critical priority", int((queue["priority"] == "Critical").sum()))
-    c[2].metric("High priority", int((queue["priority"] == "High").sum()))
-    fields = [x for x in ["Outreach_Rank", "Customer_ID", "Risk_Band", "Churn_Probability", "priority",
-                          "recommended_action", "Days_Since_Last_Transaction", "Number_of_Complaints",
-                          "Customer_Segment", "Branch_Location", "Average_Monthly_Balance"] if x in queue]
-    st.dataframe(queue[fields], use_container_width=True, hide_index=True)
-    st.download_button("Download outreach queue", queue.to_csv(index=False).encode("utf-8"),
-                       "banking_retention_outreach_queue.csv", "text/csv")
+
+    critical = int((queue["priority"] == "Critical").sum())
+    high = int((queue["priority"] == "High").sum())
+    avg_score = queue["Churn_Probability"].mean()
+    k = st.columns(4)
+    k[0].metric("Recommended contacts", f"{len(queue):,}")
+    k[1].metric("Critical priority", f"{critical:,}")
+    k[2].metric("High priority", f"{high:,}")
+    k[3].metric("Average queue risk", f"{avg_score:.1%}")
+
+    left, right = st.columns([1, 1], gap="large")
+    with left:
+        section("Queue risk composition")
+        risk_mix(queue)
+    with right:
+        section("Priority mix")
+        priority_counts = queue["priority"].value_counts().reindex(
+            ["Critical", "High", "Medium", "Low", "None"]
+        ).dropna()
+        chart_bar(priority_counts, horizontal=True)
+
+    section("Relationship-team worklist", "Ranked by score. Recommendations are prompts for human review.")
+    fields = [x for x in ["Outreach_Rank", "Customer_ID", "Risk_Band",
+        "Churn_Probability", "priority", "recommended_action", "Days_Since_Last_Transaction",
+        "Number_of_Complaints", "Customer_Segment", "Branch_Location",
+        "Average_Monthly_Balance"] if x in queue]
+    st.dataframe(queue[fields].style.format(
+        {"Churn_Probability": "{:.1%}", "Average_Monthly_Balance": "MWK {:,.0f}"}),
+        use_container_width=True, hide_index=True)
+    st.download_button("Download relationship-team worklist",
+        queue.to_csv(index=False).encode("utf-8"),
+        "nyanja_retention_worklist.csv", "text/csv")
 
 
 def prediction_lab():
-    st.title("Prediction Lab")
+    page_header("Scenario testing  /  Batch scoring",
+                "Prediction Lab",
+                "Score a new customer file and produce a ranked, downloadable risk assessment.")
     model, _ = load_model()
     if model is None:
         st.warning("Trained model not found. Run scripts/train_pipeline.py first.")
         return
-    upload = st.file_uploader("Upload a customer CSV for batch scoring", type=["csv"])
-    st.caption("The upload must contain the raw input fields used during model training.")
+    upload = st.file_uploader("Upload customer data (CSV)", type=["csv"])
+    st.caption("Required fields are the same raw customer attributes used during model training.")
     if upload is None:
+        st.info("Upload a CSV to begin. Your file is processed within this app session.")
         return
     try:
         customers = pd.read_csv(upload)
@@ -205,48 +400,122 @@ def prediction_lab():
             return
         scored = customers.copy()
         scored["Churn_Probability"] = model.predict_proba(customers)[:, 1]
-        scored["Risk_Band"] = scored["Churn_Probability"].map(RetentionRecommender().assign_risk_band)
-        scored["Predicted_Churn_0.50"] = (scored["Churn_Probability"] >= 0.50).astype(int)
-        st.success(f"Scored {len(scored):,} customer records.")
-        st.dataframe(scored.sort_values("Churn_Probability", ascending=False), use_container_width=True, hide_index=True)
-        st.download_button("Download scored customers", scored.to_csv(index=False).encode("utf-8"),
-                           "banking_customer_churn_scores.csv", "text/csv")
+        recommender = RetentionRecommender()
+        scored["Risk_Band"] = scored["Churn_Probability"].map(recommender.assign_risk_band)
+        scored["Predicted_Churn_0.50"] = (scored["Churn_Probability"] >= .50).astype(int)
+        st.success(f"Successfully scored {len(scored):,} customer records.")
+        high = int((scored["Risk_Band"] == "High Risk").sum())
+        medium = int((scored["Risk_Band"] == "Medium Risk").sum())
+        low = int((scored["Risk_Band"] == "Low Risk").sum())
+        c = st.columns(4)
+        c[0].metric("Records scored", f"{len(scored):,}")
+        c[1].metric("High risk", f"{high:,}")
+        c[2].metric("Medium risk", f"{medium:,}")
+        c[3].metric("Low risk", f"{low:,}")
+        section("Scoring distribution")
+        risk_mix(scored)
+        section("Ranked scoring results")
+        st.dataframe(scored.sort_values("Churn_Probability", ascending=False),
+                     use_container_width=True, hide_index=True)
+        st.download_button("Download scored customer file",
+            scored.to_csv(index=False).encode("utf-8"),
+            "nyanja_customer_churn_scores.csv", "text/csv")
     except Exception as exc:
         st.error(f"Unable to score this file: {exc}")
 
 
 def model_governance(metadata):
-    st.title("Model Performance & Governance")
+    page_header("Validate  /  Monitor  /  Govern",
+                "Model Performance & Governance",
+                "Understand model discrimination, error trade-offs and the controls required for responsible use.")
     if not metadata:
         st.warning("Model metadata is unavailable. Train the model to generate an evaluation record.")
         return
     metrics = metadata.get("test_metrics", {})
-    labels = {"roc_auc": "ROC-AUC", "average_precision": "Average precision", "accuracy": "Accuracy",
-              "balanced_accuracy": "Balanced accuracy", "precision": "Precision", "recall": "Recall",
-              "f1": "F1 score", "specificity": "Specificity", "brier_score": "Brier score", "log_loss": "Log loss"}
-    st.subheader("Held-out test performance")
-    st.dataframe(pd.DataFrame([{"Metric": label, "Value": metrics.get(key)}
-                               for key, label in labels.items() if key in metrics]), hide_index=True)
+    primary = st.columns(4)
+    for col, key, label in zip(primary, ["roc_auc", "recall", "precision", "f1"],
+                               ["ROC-AUC", "Recall", "Precision", "F1 score"]):
+        value = metrics.get(key)
+        col.metric(label, f"{value:.1%}" if isinstance(value, (int, float)) else "—")
+
+    section("Held-out model scorecard", "All metrics below are calculated on the independent test split.")
+    labels = {
+        "roc_auc": "ROC-AUC", "average_precision": "Average precision",
+        "accuracy": "Accuracy", "balanced_accuracy": "Balanced accuracy",
+        "precision": "Precision", "recall": "Recall", "f1": "F1 score",
+        "specificity": "Specificity", "brier_score": "Brier score", "log_loss": "Log loss",
+    }
+    metric_frame = pd.DataFrame([
+        {"Metric": label, "Value": metrics.get(key)}
+        for key, label in labels.items() if key in metrics
+    ])
+    st.dataframe(metric_frame.style.format({"Value": "{:.3f}"}),
+                 use_container_width=True, hide_index=True)
+
+    threshold = metadata.get("threshold_analysis", {})
+    if threshold:
+        threshold_frame = pd.DataFrame(threshold)
+        if {"threshold", "precision", "recall"}.issubset(threshold_frame.columns):
+            section("Decision-threshold trade-off", "Changing the threshold changes outreach volume and missed churn risk.")
+            fig, ax = plt.subplots(figsize=(8, 3.2))
+            ax.plot(threshold_frame["threshold"], threshold_frame["precision"],
+                    marker="o", linewidth=2, label="Precision", color=BLUE)
+            ax.plot(threshold_frame["threshold"], threshold_frame["recall"],
+                    marker="o", linewidth=2, label="Recall", color=TEAL)
+            ax.set_ylim(0, 1)
+            ax.set_xlabel("Probability threshold")
+            ax.set_ylabel("Metric")
+            ax.grid(alpha=.2, linestyle="--")
+            ax.legend(frameon=False)
+            ax.spines[["top", "right", "left"]].set_visible(False)
+            fig.tight_layout()
+            st.pyplot(fig, use_container_width=True)
+            plt.close(fig)
+
     ece = metadata.get("calibration_ece")
     if ece is not None:
         st.metric("Expected calibration error", f"{ece:.3f}")
-    st.subheader("Operating principles")
-    st.markdown("- Scores support prioritisation; they do not prove a customer will leave.\n"
-                "- Review reason codes and retention actions before any customer contact.\n"
-                "- Monitor calibration, data quality, drift and performance after each model refresh.\n"
-                "- Set thresholds using contact capacity, intervention cost and measured outcomes.")
+
+    section("Responsible operating controls")
+    controls = [
+        ("Human review", "Treat scores as prioritisation signals, not definitive customer outcomes."),
+        ("Fairness review", "Compare error rates and intervention outcomes across relevant customer groups."),
+        ("Data quality", "Monitor missingness, category drift, outliers and input schema changes."),
+        ("Model monitoring", "Track calibration, discrimination and score distribution after each refresh."),
+        ("Intervention testing", "Use controlled experiments to establish whether retention actions improve outcomes."),
+    ]
+    for heading, detail in controls:
+        st.markdown(f'<div class="insight"><strong>{heading}</strong><span>{detail}</span></div>',
+                    unsafe_allow_html=True)
+        st.markdown("")
 
 
 def main():
+    apply_theme()
     data = load_data()
     _, metadata = load_model()
     with st.sidebar:
-        st.markdown(f"<h2 style='color:{NAVY}'>NYANJA COMMERCIAL BANK</h2>", unsafe_allow_html=True)
-        st.caption("Customer intelligence & retention")
-        page = st.radio("Workspace", ["Executive Overview", "Customer Intelligence",
-                                      "Retention Prioritisation", "Prediction Lab", "Model Governance"])
+        st.markdown(
+            '<div style="padding:8px 2px 18px 2px">'
+            '<div style="font-size:1.8rem">🏦</div>'
+            '<div style="font-family:Manrope;font-weight:800;font-size:1.05rem;color:#FFFFFF">NYANJA COMMERCIAL BANK</div>'
+            '<div style="font-size:.76rem;color:#AFC4D8">CUSTOMER INTELLIGENCE SUITE</div></div>',
+            unsafe_allow_html=True,
+        )
         st.divider()
-        st.caption("Monetary values are presented in MWK.")
+        page = st.radio(
+            "WORKSPACE",
+            ["Executive Overview", "Customer Intelligence", "Retention Prioritisation",
+             "Prediction Lab", "Model Governance"],
+            label_visibility="visible",
+        )
+        st.divider()
+        st.caption("PORTFOLIO CONTEXT")
+        st.markdown("**Currency**  \nMalawi Kwacha (MWK)")
+        st.markdown("**Scoring**  \nFull customer population")
+        st.markdown("**Decision use**  \nHuman-reviewed support")
+        st.divider()
+        st.caption("Workspace build · 2.0")
     if page == "Executive Overview":
         overview(data, metadata)
     elif page == "Customer Intelligence":
@@ -257,8 +526,11 @@ def main():
         prediction_lab()
     else:
         model_governance(metadata)
-    st.divider()
-    st.caption("Banking analytics portfolio • Decision-support outputs require human review.")
+    st.markdown(
+        '<div class="footer">NYANJA COMMERCIAL BANK · CUSTOMER ANALYTICS & RETENTION '
+        ' <span style="float:right">Decision-support outputs require human review.</span></div>',
+        unsafe_allow_html=True,
+    )
 
 
 if __name__ == "__main__":
