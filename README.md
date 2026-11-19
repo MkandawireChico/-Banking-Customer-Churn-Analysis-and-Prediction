@@ -131,8 +131,7 @@ Creates `data/raw/churn_customers_synthetic.csv` with 20,000 base customer recor
 python scripts/train_pipeline.py
 ```
 
-The pipeline writes the trained model, cleaned customer cohort, held-out test predictions and full-population customer scores to the repository's `models/` and `data/processed/` directories.
-The pipeline writes:
+The pipeline writes the following artefacts to the repository's `models/` and `data/processed/` directories:
 - `models/logistic_regression_pipeline.joblib` — selected trained model and evaluation metadata
 - `data/processed/churn_predictions.csv` — held-out test predictions for independent evaluation
 - `data/processed/churn_customer_scores.csv` — scores for the complete cleaned customer cohort, used by the retention command centre
