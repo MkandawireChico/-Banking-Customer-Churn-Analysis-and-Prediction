@@ -33,7 +33,7 @@ def load_data():
         score_scope = "Held-out test cohort (fallback)"
     else:
         return None
-    customers = pd.read_csv(customer_file)
+    customers = pd.read_csv(customer_file).drop_duplicates(subset=["Customer_ID"], keep="first")
     data = scores.merge(customers, on="Customer_ID", how="left", suffixes=("", "_profile"))
     data["Score_Scope"] = score_scope
     if "Actual_Churn" not in data and "Churn" in data:
