@@ -459,7 +459,7 @@ class ModelEvaluator:
             raise ValueError("Probabilities must be finite values between 0 and 1.")
 
         bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
-        bin_ids = np.digitize(probabilities, bin_edges[1:-1], right=False)
+        bin_ids = np.clip(np.digitize(probabilities, bin_edges[1:-1], right=False), 0, n_bins - 1)
         counts = np.bincount(bin_ids, minlength=n_bins)
         prob_true = np.full(n_bins, np.nan, dtype=float)
         prob_pred = np.full(n_bins, np.nan, dtype=float)
