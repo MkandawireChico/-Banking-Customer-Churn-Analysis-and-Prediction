@@ -510,7 +510,12 @@ class ModelEvaluator:
                 "recall": float(recall_score(subset["actual"], subset["predicted"], zero_division=0)),
                 "f1": float(f1_score(subset["actual"], subset["predicted"], zero_division=0)),
             })
-        return pd.DataFrame(rows).sort_values("customers", ascending=False).reset_index(drop=True)
+        columns = [group_name, "customers", "churn_rate", "precision", "recall", "f1"]
+        if not rows:
+            return pd.DataFrame(columns=columns)
+        return pd.DataFrame(rows, columns=columns).sort_values(
+            "customers", ascending=False
+        ).reset_index(drop=True)
 
     def cross_validate(
         self,
