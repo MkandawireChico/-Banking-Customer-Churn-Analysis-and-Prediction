@@ -346,6 +346,44 @@ def customer_intelligence(data):
         view[fields].to_csv(index=False).encode("utf-8"),
         "banking_customer_intelligence.csv", "text/csv")
 
+    st.markdown("")
+    section("Customer 360° profile", "Select an individual record for a consolidated relationship-team review.")
+    customer_ids = view["Customer_ID"].dropna().astype(str).sort_values().unique().tolist()
+    if customer_ids:
+        selected_id = st.selectbox("Select customer", customer_ids, key="customer_360_id")
+        profile = view[view["Customer_ID"].astype(str) == selected_id].iloc[0]
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("Churn probability", f"{profile['Churn_Probability']:.1%}")
+        p2.metric("Risk classification", str(profile["Risk_Band"]))
+        if "Average_Monthly_Balance" in profile.index:
+            p3.metric("Average monthly balance", money(profile["Average_Monthly_Balance"]))
+        if "Days_Since_Last_Transaction" in profile.index:
+            p4.metric("Days inactive", f"{profile['Days_Since_Last_Transaction']:,.0f}")
+        profile_fields = [
+            ("Customer segment", "Customer_Segment"), ("Branch", "Branch_Location"),
+            ("Tenure (months)", "Account_Tenure_Months"), ("Products held", "Number_of_Products"),
+            ("Complaints", "Number_of_Complaints"), ("Digital engagement", "Digital_Engagement_Score"),
+            ("Credit score", "Credit_Score"), ("Age", "Age"),
+        ]
+        profile_rows = [
+            {"Profile attribute": label, "Value": profile[column]}
+            for label, column in profile_fields
+            if column in profile.index and pd.notna(profile[column])
+        ]
+        st.dataframe(pd.DataFrame(profile_rows), use_container_width=True, hide_index=True)
+        recommendation = RetentionRecommender().recommend_action(
+            profile, float(profile["Churn_Probability"]), str(profile["Risk_Band"])
+        )
+        reason_text = "; ".join(recommendation["reason_codes"]) or "No rule-based reason flags were triggered."
+        st.markdown(
+            f'<div class="insight"><strong>Suggested relationship-team action · '
+            f'{recommendation["priority"]}</strong><span>{recommendation["recommended_action"]}'
+            f'<br/>Review indicators: {reason_text}</span></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("No customer profiles are available for the current filters.")
+
 
 def retention_prioritisation(data):
     page_header("Activate  /  Prioritise  /  Retain",
@@ -499,6 +537,105 @@ def prediction_lab():
         st.error(f"Unable to score this file: {exc}")
 
 
+def intervention_outcomes(data):
+    page_header(
+        "Measure  /  Learn  /  Improve",
+        "Intervention Outcomes",
+        "Review completed outreach and compare observed outcomes across campaigns, branches and risk groups.",
+    )
+    if data is None:
+        st.warning("Customer scoring data is unavailable. Run the training pipeline first.")
+        return
+    st.markdown(
+        "Upload a relationship-team outcome file with one row per customer. Required columns: "
+        "`Customer_ID`, `Contacted` (1/0), and `Retained` (1/0). Optional columns: "
+        "`Campaign`, `Contact_Date`, and `Outcome_Notes`."
+    )
+    template = pd.DataFrame({
+        "Customer_ID": ["CUST-00001"], "Contacted": [1], "Retained": [1],
+        "Campaign": ["Win-back pilot"], "Contact_Date": ["2026-11-01"],
+        "Outcome_Notes": ["Customer agreed to review product options"],
+    })
+    st.download_button("Download outcome-file template",
+        template.to_csv(index=False).encode("utf-8"),
+        "nyanja_intervention_outcomes_template.csv", "text/csv")
+    upload = st.file_uploader("Upload intervention outcomes (CSV)", type=["csv"], key="outcomes_upload")
+    if upload is None:
+        st.info("Upload an outcomes file to review contact coverage and observed retention results.")
+        return
+    try:
+        outcomes = pd.read_csv(upload)
+    except Exception as exc:
+        st.error(f"Could not read the uploaded file: {exc}")
+        return
+    required = {"Customer_ID", "Contacted", "Retained"}
+    missing = sorted(required - set(outcomes.columns))
+    if missing:
+        st.error("Missing required columns: " + ", ".join(missing))
+        return
+    outcomes = outcomes.copy()
+    for column in ["Contacted", "Retained"]:
+        outcomes[column] = pd.to_numeric(outcomes[column], errors="coerce")
+    if outcomes[["Contacted", "Retained"]].isna().any().any():
+        st.error("Contacted and Retained must contain only 1 or 0 values.")
+        return
+    if not outcomes["Contacted"].isin([0, 1]).all() or not outcomes["Retained"].isin([0, 1]).all():
+        st.error("Contacted and Retained must contain only 1 or 0 values.")
+        return
+    if (outcomes["Retained"] > outcomes["Contacted"]).any():
+        st.error("A customer cannot be marked retained when Contacted is 0.")
+        return
+    outcomes["Customer_ID"] = outcomes["Customer_ID"].astype(str)
+    outcomes = outcomes.drop_duplicates("Customer_ID", keep="last")
+    scored = data.copy()
+    scored["Customer_ID"] = scored["Customer_ID"].astype(str)
+    report = outcomes.merge(
+        scored[["Customer_ID", "Churn_Probability", "Risk_Band", "Branch_Location"]],
+        on="Customer_ID", how="left", suffixes=("", "_portfolio"),
+    )
+    contacted = report[report["Contacted"] == 1]
+    matched = contacted["Churn_Probability"].notna().sum()
+    retention_rate = contacted["Retained"].mean() if len(contacted) else 0
+    k = st.columns(4)
+    k[0].metric("Outcome records", f"{len(report):,}")
+    k[1].metric("Customers contacted", f"{len(contacted):,}")
+    k[2].metric("Matched to scored portfolio", f"{matched:,}",
+                f"{matched / len(contacted):.1%} of contacted" if len(contacted) else "No contacts")
+    k[3].metric("Observed retention rate", f"{retention_rate:.1%}", "Among contacted records")
+    if "Campaign" in report.columns:
+        section("Campaign-level outcomes", "Descriptive results; comparisons do not establish causal impact.")
+        campaign = contacted.groupby("Campaign", dropna=False).agg(
+            Customers_Contacted=("Customer_ID", "nunique"),
+            Customers_Retained=("Retained", "sum"),
+            Retention_Rate=("Retained", "mean"),
+        ).reset_index()
+        st.dataframe(campaign.style.format({"Retention_Rate": "{:.1%}"}),
+                     use_container_width=True, hide_index=True)
+    if "Branch_Location" in contacted.columns and contacted["Branch_Location"].notna().any():
+        section("Branch-level intervention outcomes")
+        branch = contacted.groupby("Branch_Location", dropna=False).agg(
+            Customers_Contacted=("Customer_ID", "nunique"),
+            Customers_Retained=("Retained", "sum"),
+            Retention_Rate=("Retained", "mean"),
+        ).reset_index().sort_values("Retention_Rate", ascending=False)
+        st.dataframe(branch.style.format({"Retention_Rate": "{:.1%}"}),
+                     use_container_width=True, hide_index=True)
+    section("Customer outcome register")
+    display = [c for c in [
+        "Customer_ID", "Campaign", "Contact_Date", "Contacted", "Retained",
+        "Churn_Probability", "Risk_Band", "Branch_Location", "Outcome_Notes",
+    ] if c in report.columns]
+    st.dataframe(report[display].style.format({"Churn_Probability": "{:.1%}"}),
+                 use_container_width=True, hide_index=True)
+    st.download_button("Download reviewed outcome register",
+        report.to_csv(index=False).encode("utf-8"),
+        "nyanja_reviewed_intervention_outcomes.csv", "text/csv")
+    st.caption(
+        "These are observed post-contact outcomes, not proof that an intervention caused retention. "
+        "Use an appropriate control group or experiment to estimate incremental impact."
+    )
+
+
 def model_governance(metadata):
     page_header("Validate  /  Monitor  /  Govern",
                 "Model Performance & Governance",
@@ -581,7 +718,7 @@ def main():
         page = st.radio(
             "WORKSPACE",
             ["Executive Overview", "Customer Intelligence", "Retention Prioritisation",
-             "Prediction Lab", "Model Governance"],
+             "Intervention Outcomes", "Prediction Lab", "Model Governance"],
             label_visibility="visible",
         )
         st.divider()
@@ -597,6 +734,8 @@ def main():
         customer_intelligence(data)
     elif page == "Retention Prioritisation":
         retention_prioritisation(data)
+    elif page == "Intervention Outcomes":
+        intervention_outcomes(data)
     elif page == "Prediction Lab":
         prediction_lab()
     else:
