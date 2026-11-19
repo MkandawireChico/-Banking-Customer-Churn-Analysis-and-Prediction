@@ -702,6 +702,28 @@ def model_governance(metadata):
     st.dataframe(metric_frame.style.format({"Value": "{:.3f}"}),
                  use_container_width=True, hide_index=True)
 
+    comparison = metadata.get("model_comparison", [])
+    if comparison:
+        section("Candidate model comparison", "All candidates are evaluated on the same held-out test cohort.")
+        comparison_frame = pd.DataFrame(comparison)
+        display_metrics = [column for column in [
+            "model", "roc_auc", "average_precision", "recall", "precision",
+            "f1", "accuracy", "balanced_accuracy",
+        ] if column in comparison_frame]
+        st.dataframe(comparison_frame[display_metrics].style.format({
+            column: "{:.1%}" for column in display_metrics if column != "model"
+        }), use_container_width=True, hide_index=True)
+        logistic = comparison_frame[comparison_frame["model"] == "logistic"]
+        forest = comparison_frame[comparison_frame["model"] == "random_forest"]
+        if not logistic.empty and not forest.empty:
+            lr, rf = logistic.iloc[0], forest.iloc[0]
+            st.caption(
+                f"Logistic Regression recall: {lr['recall']:.1%}; Random Forest recall: {rf['recall']:.1%}. "
+                f"Logistic Regression F1: {lr['f1']:.1%}; Random Forest F1: {rf['f1']:.1%}. "
+                "The operating choice depends on the relative cost of missed churners and unnecessary outreach; "
+                "neither model is universally best on every metric."
+            )
+
     confusion = metadata.get("test_confusion_matrix")
     if confusion and len(confusion) == 2:
         section("Test-set confusion matrix", "Fixed 0.50 decision threshold. Rows are actual outcomes; columns are model predictions.")
