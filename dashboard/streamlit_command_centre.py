@@ -28,8 +28,9 @@ def load_data():
     if "Actual_Churn" not in data and "Churn" in data:
         data["Actual_Churn"] = data["Churn"]
     if "Risk_Band" not in data:
-        data["Risk_Band"] = pd.cut(data["Churn_Probability"], [-0.000001, 0.33, 0.66, 1.000001],
-                                   labels=["Low Risk", "Medium Risk", "High Risk"]).astype(str)
+        data["Risk_Band"] = data["Churn_Probability"].apply(
+            RetentionRecommender().assign_risk_band
+        )
     return data
 
 
