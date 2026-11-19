@@ -19,12 +19,23 @@ NAVY = "#142B4A"
 @st.cache_data
 def load_data():
     score_file = ROOT / "data" / "processed" / "churn_customer_scores.csv"
+    test_file = ROOT / "data" / "processed" / "churn_predictions.csv"
     customer_file = ROOT / "data" / "processed" / "churn_customers_clean.csv"
-    if not score_file.exists() or not customer_file.exists():
+    if not customer_file.exists():
         return None
-    scores = pd.read_csv(score_file)
+    if score_file.exists():
+        scores = pd.read_csv(score_file)
+        score_scope = "Full population"
+    elif test_file.exists():
+        # Backward-compatible fallback for repository checkouts made before
+        # the full-population score export was introduced.
+        scores = pd.read_csv(test_file)
+        score_scope = "Held-out test cohort (fallback)"
+    else:
+        return None
     customers = pd.read_csv(customer_file)
     data = scores.merge(customers, on="Customer_ID", how="left", suffixes=("", "_profile"))
+    data["Score_Scope"] = score_scope
     if "Actual_Churn" not in data and "Churn" in data:
         data["Actual_Churn"] = data["Churn"]
     if "Risk_Band" not in data:
@@ -49,11 +60,15 @@ def money(value):
 
 def overview(data, metadata):
     st.title("Banking Customer Retention Command Centre")
-    st.caption("Full-population customer scoring • Portfolio intelligence • Retention prioritisation")
-    st.caption("Portfolio risk counts use full-population scores; model validation metrics are calculated separately on the held-out test set. Full-population scores are for prioritisation, not independent model evaluation.")
+    st.caption("Portfolio intelligence • Customer risk • Retention prioritisation")
     if data is None or data.empty:
         st.warning("Analytics exports are missing. Run scripts/train_pipeline.py from the repository root.")
         return
+    score_scope = data["Score_Scope"].iloc[0] if "Score_Scope" in data else "Unknown"
+    if score_scope == "Held-out test cohort (fallback)":
+        st.info("This checkout does not yet contain full-population customer scores. The dashboard is using the held-out test cohort; rerun scripts/train_pipeline.py to populate the complete retention queue.")
+    else:
+        st.caption("Portfolio summaries use full-population scores; held-out model metrics are reported separately. Portfolio scores support prioritisation and are not independent model evaluation.")
     total = len(data)
     churn = data["Actual_Churn"].mean()
     high_mask = data["Risk_Band"] == "High Risk"
@@ -135,6 +150,8 @@ def customer_intelligence(data):
 def retention_prioritisation(data):
     st.title("Retention Prioritisation")
     st.caption("Rank customers by churn probability and review a suggested next-best action.")
+    if data is not None and "Score_Scope" in data and data["Score_Scope"].iloc[0] != "Full population":
+        st.info("The queue currently covers only the held-out test cohort. Run the latest training pipeline to generate full-population customer scores.")
     if data is None:
         st.warning("Prediction exports are missing. Run the training pipeline first.")
         return
