@@ -295,6 +295,7 @@ def main():
     
     metadata = {
         "test_metrics": test_metrics,
+        "model_comparison": comparison_df.reset_index().to_dict(orient="records"),
         "test_confusion_matrix": test_confusion.tolist(),
         "test_confusion_counts": confusion_counts,
         "pr_curve": {
