@@ -282,16 +282,33 @@ def main():
         "Predicted_Churn_0.50": y_pred,
     })
     
-    # Use the same inclusive boundaries as the retention queue and prediction app.
+    # Keep the held-out test predictions separate for honest model evaluation.
     risk_recommender = RetentionRecommender()
     predictions_df["Risk_Band"] = predictions_df["Churn_Probability"].apply(
         risk_recommender.assign_risk_band
     )
-    
-    predictions_path = output_dir.parent / "data" / "processed" / "churn_predictions.csv"
-    predictions_path.parent.mkdir(parents=True, exist_ok=True)
+
+    processed_dir = output_dir.parent / "data" / "processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    predictions_path = processed_dir / "churn_predictions.csv"
     predictions_df.to_csv(predictions_path, index=False)
-    print(f"Predictions saved to {predictions_path}")
+    print(f"Held-out test predictions saved to {predictions_path}")
+
+    # Score the complete cleaned customer population for portfolio monitoring
+    # and capacity-constrained retention prioritisation. These are in-sample
+    # portfolio scores, not an independent evaluation of model performance.
+    portfolio_probabilities = selected_pipeline.predict_proba(X)[:, 1]
+    portfolio_scores = pd.DataFrame({
+        "Customer_ID": df_clean["Customer_ID"].values,
+        "Churn_Probability": portfolio_probabilities,
+        "Predicted_Churn_0.50": (portfolio_probabilities >= 0.50).astype(int),
+    })
+    portfolio_scores["Risk_Band"] = portfolio_scores["Churn_Probability"].apply(
+        risk_recommender.assign_risk_band
+    )
+    portfolio_path = processed_dir / "churn_customer_scores.csv"
+    portfolio_scores.to_csv(portfolio_path, index=False)
+    print(f"Full-population customer scores saved to {portfolio_path}")
     
     # 13. Retention analysis
     print("\n=== Retention Analysis ===")
