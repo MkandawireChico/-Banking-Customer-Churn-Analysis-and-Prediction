@@ -43,7 +43,32 @@ def apply_theme():
         [data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 8px 10px; border-radius: 8px; }
         [data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #203B5B; }
         .block-container { padding-top: 2rem; padding-bottom: 2.5rem; max-width: 1500px; }
-        h1, h2, h3 { font-family: 'Manrope', sans-serif; color: #142B4A; letter-spacing: -0.025em; }
+        /* Explicit foreground colours prevent theme-dependent, low-contrast headings. */
+        .stApp, .stApp p, .stApp label, .stApp [data-testid="stMarkdownContainer"],
+        .stApp [data-testid="stMarkdownContainer"] p,
+        .stApp [data-testid="stMarkdownContainer"] li { color: #24364B; }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4,
+        .stApp [data-testid="stMarkdownContainer"] h1,
+        .stApp [data-testid="stMarkdownContainer"] h2,
+        .stApp [data-testid="stMarkdownContainer"] h3,
+        .stApp [data-testid="stMarkdownContainer"] h4 {
+            color: #142B4A !important;
+            font-family: 'Manrope', sans-serif;
+            letter-spacing: -0.025em;
+            font-weight: 750;
+        }
+        .stApp [data-testid="stWidgetLabel"] p,
+        .stApp [data-testid="stWidgetLabel"] label,
+        .stApp [data-testid="stCaptionContainer"] {
+            color: #43566D !important;
+        }
+        .stApp [data-testid="stMetricLabel"] *,
+        .stApp [data-testid="stMetricValue"] * { color: #142B4A !important; }
+        .stApp input, .stApp textarea, .stApp [data-baseweb="select"] *,
+        .stApp [data-baseweb="input"] * { color: #24364B; }
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 { color: #FFFFFF !important; }
         h1 { font-weight: 800; }
         [data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #E4EAF1; padding: 17px 19px; border-radius: 13px; box-shadow: 0 2px 8px rgba(20,43,74,.035); }
         [data-testid="stMetricLabel"] { color: #64748B; font-size: .82rem; }
@@ -377,6 +402,56 @@ def retention_prioritisation(data):
     st.download_button("Download relationship-team worklist",
         queue.to_csv(index=False).encode("utf-8"),
         "nyanja_retention_worklist.csv", "text/csv")
+
+    st.markdown("")
+    section("Campaign budget & outcome planner",
+            "Translate the ranked queue into a budget scenario. Response assumptions are user inputs, not model predictions.")
+    budget_col, cost_col, response_col = st.columns(3)
+    campaign_budget = budget_col.number_input(
+        "Campaign budget (MWK)", min_value=0, max_value=100_000_000,
+        value=2_500_000, step=100_000, format="%d"
+    )
+    cost_per_contact = cost_col.number_input(
+        "Estimated cost per contact (MWK)", min_value=1, max_value=1_000_000,
+        value=5_000, step=500, format="%d"
+    )
+    response_rate = response_col.slider(
+        "Assumed successful retention rate", min_value=1, max_value=50,
+        value=15, step=1
+    ) / 100
+
+    budget_capacity = int(campaign_budget // cost_per_contact)
+    planned_contacts = min(len(queue), capacity, budget_capacity)
+    planned_queue = queue.head(planned_contacts).copy()
+    estimated_retained = int(round(planned_contacts * response_rate))
+    planned_spend = planned_contacts * cost_per_contact
+    average_balance = (
+        planned_queue["Average_Monthly_Balance"].sum()
+        if planned_contacts and "Average_Monthly_Balance" in planned_queue else 0
+    )
+    p = st.columns(4)
+    p[0].metric("Budget-supported contacts", f"{planned_contacts:,}",
+                f"{budget_capacity:,} affordable at this unit cost")
+    p[1].metric("Planned campaign spend", money(planned_spend))
+    p[2].metric("Scenario retained customers", f"{estimated_retained:,}",
+                f"{response_rate:.0%} assumed response")
+    cost_per_save = planned_spend / estimated_retained if estimated_retained else None
+    p[3].metric("Scenario cost per retained", money(cost_per_save) if cost_per_save else "—")
+
+    st.caption(
+        f"Selected {planned_contacts:,} highest-priority customers from the queue. "
+        f"Balances associated with this contact group: {money(average_balance)}. "
+        "This balance is exposure context, not revenue, profit or guaranteed savings."
+    )
+    if planned_contacts:
+        st.download_button(
+            "Download budget-aligned campaign list",
+            planned_queue.to_csv(index=False).encode("utf-8"),
+            "nyanja_budget_aligned_campaign.csv",
+            "text/csv",
+        )
+    else:
+        st.info("Increase the campaign budget or reduce the estimated cost per contact to fund outreach.")
 
 
 def prediction_lab():
