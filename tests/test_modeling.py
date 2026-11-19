@@ -264,3 +264,22 @@ def test_model_evaluator_calibration_analysis():
     assert "prob_pred" in result
     assert 0 <= result["ece"] <= 1
     assert len(result["prob_true"]) == 5
+
+
+
+def test_engineered_features_reach_the_model_preprocessor(sample_data):
+    """Ensure engineered columns are selected rather than silently discarded."""
+    numerical_cols = ["Age", "Monthly_Income", "Account_Tenure_Months", "Number_of_Products",
+                      "Average_Monthly_Transactions", "Days_Since_Last_Transaction",
+                      "Total_Transaction_Value_Last_6_Months", "Average_Monthly_Balance",
+                      "Number_of_Complaints", "Digital_Engagement_Score",
+                      "Has_Mobile_Banking", "Has_Internet_Banking"]
+    categorical_cols = ["Gender", "Customer_Segment"]
+    X = sample_data[numerical_cols + categorical_cols]
+    y = sample_data["Churn"]
+    pipeline = ChurnModelPipeline(model_type="logistic", random_state=42)
+    pipeline.fit(X, y, numerical_cols, categorical_cols)
+    selected = pipeline.pipeline.named_steps["preprocessor"].get_feature_names_out()
+    assert "num__Average_Transaction_Value" in selected
+    assert "num__Complaint_Rate" in selected
+    assert "num__Engagement_Index" in selected
