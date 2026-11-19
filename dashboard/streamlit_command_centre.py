@@ -67,10 +67,10 @@ def overview(data, metadata):
     with left:
         st.subheader("Observed churn by customer segment")
         if "Customer_Segment" in data:
-            st.bar_chart(data.groupby("Customer_Segment", observed=True)["Actual_Churn"].mean().sort_values(), horizontal=True)
+            st.bar_chart(data.groupby("Customer_Segment", observed=True)["Actual_Churn"].mean().sort_values())
         st.subheader("Observed churn by branch")
         if "Branch_Location" in data:
-            st.bar_chart(data.groupby("Branch_Location", observed=True)["Actual_Churn"].mean().sort_values(), horizontal=True)
+            st.bar_chart(data.groupby("Branch_Location", observed=True)["Actual_Churn"].mean().sort_values())
     with right:
         st.subheader("Portfolio risk distribution")
         risk = data["Risk_Band"].value_counts().reindex(["Low Risk", "Medium Risk", "High Risk"]).fillna(0)
