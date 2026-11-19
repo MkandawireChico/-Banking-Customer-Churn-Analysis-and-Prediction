@@ -1,0 +1,118 @@
+name: Refresh production churn model artefacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_full_refresh:
+        description: "Confirm retraining on the committed full customer dataset"
+        required: true
+        type: choice
+        options:
+          - "yes"
+          - "no"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-model-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: inputs.confirm_full_refresh == 'yes'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify full source dataset is present
+        run: |
+          test -s data/raw/churn_customers_synthetic.csv
+          python - <<'PY'
+          import pandas as pd
+          source = pd.read_csv("data/raw/churn_customers_synthetic.csv")
+          assert len(source) > 3000, (
+              f"Expected the committed full-population source, found only {len(source):,} rows"
+          )
+          assert "Customer_ID" in source and "Churn" in source
+          print(f"Full source dataset confirmed: {len(source):,} rows")
+          PY
+
+      - name: Retrain and regenerate evaluation artefacts
+        run: |
+          python scripts/train_pipeline.py \
+            --data-path data/raw/churn_customers_synthetic.csv \
+            --output-dir models
+
+      - name: Validate refreshed production artefacts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import joblib
+          import pandas as pd
+
+          model_path = Path("models/logistic_regression_pipeline.joblib")
+          clean_path = Path("data/processed/churn_customers_clean.csv")
+          test_path = Path("data/processed/churn_predictions.csv")
+          scores_path = Path("data/processed/churn_customer_scores.csv")
+
+          for path in (model_path, clean_path, test_path, scores_path):
+              assert path.is_file() and path.stat().st_size > 0, f"Missing artefact: {path}"
+
+          clean = pd.read_csv(clean_path)
+          test = pd.read_csv(test_path)
+          scores = pd.read_csv(scores_path)
+          payload = joblib.load(model_path)
+          metadata = payload.get("metadata", {})
+
+          required = {
+              "test_metrics", "model_comparison", "test_confusion_matrix",
+              "test_confusion_counts", "pr_curve", "threshold_analysis",
+              "cross_validation", "subgroup_metrics", "calibration_curve",
+              "calibration_ece", "data_info",
+          }
+          missing = sorted(required.difference(metadata))
+          assert not missing, f"Model metadata missing: {missing}"
+          assert len(scores) == len(clean), "Full-population scores do not cover all cleaned customers"
+          assert len(test) == metadata["data_info"]["n_test"], "Held-out prediction count mismatch"
+          assert len(scores) > 3000, "Refreshed scores do not represent the full source population"
+          assert scores["Customer_ID"].is_unique, "Duplicate customer IDs in portfolio scores"
+          assert scores["Churn_Probability"].between(0, 1).all(), "Invalid portfolio probabilities"
+          assert metadata["threshold_analysis_source"].startswith("Validation split")
+          assert metadata["data_info"]["n_train"] + metadata["data_info"]["n_test"] == len(clean)
+          print(f"Refreshed model validated: {len(clean):,} cleaned customers, "
+                f"{len(test):,} independent test predictions, {len(scores):,} portfolio scores.")
+          print("Evaluation metadata:", ", ".join(sorted(required)))
+          PY
+
+      - name: Commit refreshed production artefacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f models/logistic_regression_pipeline.joblib
+          git add -f data/processed/churn_customers_clean.csv
+          git add -f data/processed/churn_predictions.csv
+          git add -f data/processed/churn_customer_scores.csv
+          if git diff --cached --quiet; then
+            echo "Generated artefacts are unchanged; no commit required."
+          else
+            git commit -m "Refresh full-population churn model and evaluation artefacts"
+            git push origin HEAD:main
+          fi
