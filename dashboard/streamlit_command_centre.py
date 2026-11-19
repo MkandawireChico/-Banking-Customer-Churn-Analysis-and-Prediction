@@ -704,7 +704,7 @@ def model_governance(metadata):
 
     comparison = metadata.get("model_comparison", [])
     if comparison:
-        section("Candidate model comparison", "All candidates are evaluated on the same held-out test cohort.")
+        section("Candidate model comparison", "All candidates are evaluated on the same validation split from training data; the final test set is reserved for the selected model.")
         comparison_frame = pd.DataFrame(comparison)
         display_metrics = [column for column in [
             "model", "roc_auc", "average_precision", "recall", "precision",
