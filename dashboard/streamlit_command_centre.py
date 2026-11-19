@@ -18,13 +18,13 @@ NAVY = "#142B4A"
 
 @st.cache_data
 def load_data():
-    prediction_file = ROOT / "data" / "processed" / "churn_predictions.csv"
+    score_file = ROOT / "data" / "processed" / "churn_customer_scores.csv"
     customer_file = ROOT / "data" / "processed" / "churn_customers_clean.csv"
-    if not prediction_file.exists() or not customer_file.exists():
+    if not score_file.exists() or not customer_file.exists():
         return None
-    predictions = pd.read_csv(prediction_file)
+    scores = pd.read_csv(score_file)
     customers = pd.read_csv(customer_file)
-    data = predictions.merge(customers, on="Customer_ID", how="left", suffixes=("", "_profile"))
+    data = scores.merge(customers, on="Customer_ID", how="left", suffixes=("", "_profile"))
     if "Actual_Churn" not in data and "Churn" in data:
         data["Actual_Churn"] = data["Churn"]
     if "Risk_Band" not in data:
@@ -49,7 +49,8 @@ def money(value):
 
 def overview(data, metadata):
     st.title("Banking Customer Retention Command Centre")
-    st.caption("Portfolio intelligence • Churn exposure • Retention prioritisation")
+    st.caption("Full-population customer scoring • Portfolio intelligence • Retention prioritisation")
+    st.caption("Portfolio summaries use the labelled customer cohort; model validation metrics are calculated separately on the held-out test set.")
     if data is None or data.empty:
         st.warning("Analytics exports are missing. Run scripts/train_pipeline.py from the repository root.")
         return
@@ -59,10 +60,10 @@ def overview(data, metadata):
     high_count = int(high_mask.sum())
     balance_exposure = data.loc[high_mask, "Average_Monthly_Balance"].sum() if "Average_Monthly_Balance" in data else 0
     c = st.columns(4)
-    c[0].metric("Customers evaluated", f"{total:,}")
-    c[1].metric("Observed churn rate", f"{churn:.1%}")
+    c[0].metric("Customers scored", f"{total:,}")
+    c[1].metric("Historical churn rate", f"{churn:.1%}")
     c[2].metric("High-risk customers", f"{high_count:,}", f"{high_count / total:.1%} of evaluated")
-    c[3].metric("High-risk balance exposure", money(balance_exposure))
+    c[3].metric("High-risk customer balances", money(balance_exposure))
     st.divider()
     left, right = st.columns(2)
     with left:
