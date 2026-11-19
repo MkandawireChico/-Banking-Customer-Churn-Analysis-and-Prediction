@@ -258,12 +258,43 @@ def test_model_evaluator_calibration_analysis():
                        [0.3, 0.7], [0.5, 0.5], [0.1, 0.9], [0.4, 0.6], [0.2, 0.8]])
     
     result = evaluator.calibration_analysis(y_true, y_proba, n_bins=5)
-    
+
     assert "ece" in result
     assert "prob_true" in result
     assert "prob_pred" in result
+    assert "bin_count" in result
     assert 0 <= result["ece"] <= 1
     assert len(result["prob_true"]) == 5
+    assert len(result["prob_pred"]) == 5
+    assert result["bin_count"].sum() == len(y_true)
+
+
+def test_calibration_includes_probability_one_in_final_bin():
+    evaluator = ModelEvaluator()
+    y_true = np.array([0, 1, 1, 0])
+    y_proba = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [1.0, 0.0]])
+
+    result = evaluator.calibration_analysis(y_true, y_proba, n_bins=5)
+
+    assert result["bin_count"].sum() == len(y_true)
+    assert result["bin_count"][-1] == 2
+    assert result["prob_pred"][-1] == 1.0
+
+
+def test_subgroup_performance_suppresses_small_groups():
+    evaluator = ModelEvaluator()
+    y_true = np.array([0, 1, 0, 1, 1, 0])
+    y_pred = np.array([0, 1, 1, 1, 0, 0])
+    groups = pd.Series(["A", "A", "A", "A", "B", "B"])
+
+    result = evaluator.subgroup_performance(
+        y_true, y_pred, groups, group_name="Branch", min_group_size=3
+    )
+
+    assert len(result) == 1
+    assert result.iloc[0]["Branch"] == "A"
+    assert result.iloc[0]["customers"] == 4
+    assert 0 <= result.iloc[0]["recall"] <= 1
 
 
 
