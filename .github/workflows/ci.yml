@@ -111,3 +111,16 @@ jobs:
         assert set(scores["Risk_Band"].unique()).issubset({"Low Risk", "Medium Risk", "High Risk"})
         print(f"Verified {len(scores):,} full-population scores and {len(test):,} held-out predictions.")
         PY
+
+    - name: Smoke-test dashboard rendering and retention queue
+      run: |
+        python - <<'PY'
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file("dashboard/streamlit_command_centre.py", default_timeout=60).run()
+        assert not app.exception, app.exception
+
+        app.radio[0].set_value("Retention Prioritisation").run()
+        assert not app.exception, app.exception
+        print("Dashboard overview and full-population retention queue rendered successfully.")
+        PY
