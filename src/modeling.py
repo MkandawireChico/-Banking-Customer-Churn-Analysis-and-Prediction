@@ -151,11 +151,29 @@ class ChurnModelPipeline:
         from src.feature_engineering import FeatureEngineer
         
         steps = []
+        model_numerical_cols = list(numerical_cols)
         
         if use_feature_engineering:
             steps.append(('feature_engineer', FeatureEngineer()))
+            engineered_features = [
+                "Average_Transaction_Value",
+                "Transaction_Activity_Index",
+                "Digital_Banking_Usage",
+                "Complaint_Rate",
+                "Engagement_Index",
+                "Balance_to_Income_Ratio",
+                "Products_per_Tenure",
+                "Recent_Activity_Flag",
+                "High_Value_Customer_Flag",
+                "Low_Engagement_Flag",
+            ]
+            model_numerical_cols.extend(
+                name for name in engineered_features if name not in model_numerical_cols
+            )
         
-        steps.append(('preprocessor', self._get_preprocessor(numerical_cols, categorical_cols)))
+        # The feature engineer preserves raw columns and appends derived columns.
+        # Explicitly include those derived columns so the preprocessor does not drop them.
+        steps.append(('preprocessor', self._get_preprocessor(model_numerical_cols, categorical_cols)))
         steps.append(('model', self._get_model()))
         
         self.pipeline = Pipeline(steps)
