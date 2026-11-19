@@ -448,36 +448,70 @@ class ModelEvaluator:
         y_proba: np.ndarray,
         n_bins: int = 10
     ) -> Dict[str, Any]:
-        """
-        Analyze calibration of probability predictions.
-        
-        Args:
-            y_true: True labels
-            y_proba: Predicted probabilities
-            n_bins: Number of bins for calibration curve
-            
-        Returns:
-            Dictionary with calibration metrics and curve data
-        """
-        prob_true, prob_pred = calibration_curve(y_true, y_proba[:, 1], n_bins=n_bins, strategy='uniform')
-        
-        # Expected calibration error
+        """Return fixed-width calibration bins and a correctly weighted ECE."""
+        y_true = np.asarray(y_true).astype(int)
+        probabilities = np.asarray(y_proba)[:, 1]
+        if len(y_true) != len(probabilities) or len(y_true) == 0:
+            raise ValueError("Labels and probabilities must have equal, non-zero lengths.")
+        if n_bins < 2:
+            raise ValueError("n_bins must be at least 2.")
+        if not np.isfinite(probabilities).all() or ((probabilities < 0) | (probabilities > 1)).any():
+            raise ValueError("Probabilities must be finite values between 0 and 1.")
+
+        bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+        bin_ids = np.digitize(probabilities, bin_edges[1:-1], right=False)
+        counts = np.bincount(bin_ids, minlength=n_bins)
+        prob_true = np.full(n_bins, np.nan, dtype=float)
+        prob_pred = np.full(n_bins, np.nan, dtype=float)
         ece = 0.0
-        bin_edges = np.linspace(0, 1, n_bins + 1)
-        bin_width = 1.0 / n_bins
-        
-        for i in range(n_bins):
-            mask = (y_proba[:, 1] > bin_edges[i]) & (y_proba[:, 1] <= bin_edges[i + 1])
-            if mask.sum() > 0:
-                ece += (mask.sum() / len(y_true)) * abs(prob_true[i] - prob_pred[i])
-        
+        for index in range(n_bins):
+            mask = bin_ids == index
+            if mask.any():
+                prob_true[index] = float(y_true[mask].mean())
+                prob_pred[index] = float(probabilities[mask].mean())
+                ece += (mask.sum() / len(y_true)) * abs(prob_true[index] - prob_pred[index])
+
         return {
-            'ece': ece,
-            'prob_true': prob_true,
-            'prob_pred': prob_pred,
-            'n_bins': n_bins
+            "ece": float(ece),
+            "prob_true": prob_true,
+            "prob_pred": prob_pred,
+            "bin_count": counts,
+            "bin_edges": bin_edges,
+            "n_bins": n_bins,
         }
-    
+
+    def subgroup_performance(
+        self,
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        groups: pd.Series,
+        group_name: str = "group",
+        min_group_size: int = 50,
+    ) -> pd.DataFrame:
+        """Summarise held-out error rates for sufficiently large, named groups."""
+        frame = pd.DataFrame({
+            "actual": np.asarray(y_true).astype(int),
+            "predicted": np.asarray(y_pred).astype(int),
+            "group": pd.Series(groups).reset_index(drop=True),
+        })
+        if len(frame) == 0:
+            return pd.DataFrame(columns=[
+                group_name, "customers", "churn_rate", "precision", "recall", "f1"
+            ])
+        rows = []
+        for value, subset in frame.groupby("group", dropna=False, observed=True):
+            if len(subset) < min_group_size:
+                continue
+            rows.append({
+                group_name: "Not recorded" if pd.isna(value) else str(value),
+                "customers": int(len(subset)),
+                "churn_rate": float(subset["actual"].mean()),
+                "precision": float(precision_score(subset["actual"], subset["predicted"], zero_division=0)),
+                "recall": float(recall_score(subset["actual"], subset["predicted"], zero_division=0)),
+                "f1": float(f1_score(subset["actual"], subset["predicted"], zero_division=0)),
+            })
+        return pd.DataFrame(rows).sort_values("customers", ascending=False).reset_index(drop=True)
+
     def cross_validate(
         self,
         pipeline: Pipeline,
