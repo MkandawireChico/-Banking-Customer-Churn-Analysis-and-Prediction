@@ -69,3 +69,45 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  pipeline-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install project dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Generate a compact reproducible customer cohort
+      run: python scripts/generate_dataset.py --rows 3000
+
+    - name: Train the complete pipeline and export dashboard data
+      run: python scripts/train_pipeline.py
+
+    - name: Verify model and dashboard artefacts
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import pandas as pd
+
+        root = Path(".")
+        model = root / "models" / "logistic_regression_pipeline.joblib"
+        clean = pd.read_csv(root / "data/processed/churn_customers_clean.csv")
+        test = pd.read_csv(root / "data/processed/churn_predictions.csv")
+        scores = pd.read_csv(root / "data/processed/churn_customer_scores.csv")
+
+        assert model.exists(), "Trained model artefact was not created"
+        assert len(scores) == len(clean), "Portfolio scores must cover every cleaned customer"
+        assert len(test) < len(clean), "Held-out predictions should remain a separate subset"
+        assert scores["Customer_ID"].is_unique, "Portfolio scores must have unique customer IDs"
+        assert scores["Churn_Probability"].between(0, 1).all(), "Invalid churn probabilities"
+        assert set(scores["Risk_Band"].unique()).issubset({"Low Risk", "Medium Risk", "High Risk"})
+        print(f"Verified {len(scores):,} full-population scores and {len(test):,} held-out predictions.")
+        PY
