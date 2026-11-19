@@ -28,7 +28,7 @@ streamlit run dashboard/streamlit_command_centre.py
 
 ## Project Overview
 
-This project builds a complete customer-churn analytics workflow for a fictional mid-sized commercial bank in Malawi. It features:
+This project builds a complete customer-churn analytics workflow around a Malawi-focused commercial banking scenario. It features:
 
 - **Modular, reusable code** in `src/` with separate modules for data validation, feature engineering, modeling, explainability, and retention recommendations
 - **Leakage-safe feature engineering** using training-set-only statistics
@@ -88,7 +88,7 @@ banking-customer-churn-analysis/
 ├── scripts/
 │   ├── generate_dataset.py      # Reproducible synthetic data generator
 │   └── train_pipeline.py        # End-to-end training orchestration
-├── tests/                        # Unit tests (44 tests, 100% passing)
+├── tests/                        # Automated unit and regression tests
 │   ├── __init__.py
 │   ├── test_data_validation.py
 │   ├── test_feature_engineering.py
@@ -124,7 +124,7 @@ pip install -r requirements.txt
 ```bash
 python scripts/generate_dataset.py
 ```
-Creates `data/raw/churn_customers_synthetic.csv` with 20,200 records and deliberate quality issues.
+Creates `data/raw/churn_customers_synthetic.csv` with 20,000 base customer records and repeatable data-quality issues, including approximately 1% duplicate rows (20,200 records by default).
 
 ### Train Model
 ```bash
@@ -199,9 +199,9 @@ cd sql
 sqlite3 churn_analysis.db < analysis_queries.sql
 ```
 
-## Synthetic Data Disclaimer
+## Data note
 
-**This project uses entirely synthetic data created for educational and portfolio purposes.** The fictional bank, customers, figures, model results, and findings do not represent any real commercial bank or actual banking data in Malawi. Nyanja Commercial Bank is a fictional institution used for narrative consistency only.
+Customer records and outcomes are generated for a controlled banking analytics demonstration. They do not represent real customers or operational bank records. Nyanja Commercial Bank and the named branches provide context for the scenario.
 
 ## Data Quality Issues (Deliberately Injected)
 
