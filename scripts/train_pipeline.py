@@ -199,21 +199,23 @@ def main():
     print(f"\nTrain set: {len(X_train):,} rows ({y_train.mean():.2%} churn rate)")
     print(f"Test set:  {len(X_test):,} rows ({y_test.mean():.2%} churn rate)")
     
-    # 6. Compare models
-    print("\n=== Model Comparison ===")
-    comparison_df = compare_models(
-        X_train, y_train, X_test, y_test,
-        numerical_cols, categorical_cols,
-        random_state=args.random_state
-    )
-    print(comparison_df.round(4))
-    
-    # 7. Create a validation split from training data for threshold scenarios.
-    # The independent test set remains untouched for final performance reporting.
+    # 6. Hold back part of the training partition for candidate comparison and threshold scenarios.
+    # The final test partition is reserved exclusively for one-time reporting of the selected model.
     from sklearn.model_selection import train_test_split
     X_fit, X_validation, y_fit, y_validation = train_test_split(
         X_train, y_train, test_size=0.20, random_state=args.random_state, stratify=y_train
     )
+
+    # 7. Compare candidate models on validation data, never on the final test set.
+    print("\n=== Validation-Set Model Comparison ===")
+    comparison_df = compare_models(
+        X_fit, y_fit, X_validation, y_validation,
+        numerical_cols, categorical_cols,
+        random_state=args.random_state
+    )
+    print(comparison_df.round(4))
+
+    # Fit a validation-only model for threshold scenario analysis.
     validation_pipeline = ChurnModelPipeline(
         model_type="logistic", random_state=args.random_state, class_weight="balanced"
     )
