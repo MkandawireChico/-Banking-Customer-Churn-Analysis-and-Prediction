@@ -155,17 +155,22 @@ class ChurnModelPipeline:
         
         if use_feature_engineering:
             steps.append(('feature_engineer', FeatureEngineer()))
+            available_inputs = set(numerical_cols) | set(categorical_cols)
+            engineered_requirements = {
+                "Average_Transaction_Value": {"Total_Transaction_Value_Last_6_Months", "Average_Monthly_Transactions"},
+                "Transaction_Activity_Index": {"Average_Monthly_Transactions", "Days_Since_Last_Transaction"},
+                "Digital_Banking_Usage": {"Has_Mobile_Banking", "Has_Internet_Banking"},
+                "Complaint_Rate": {"Number_of_Complaints", "Account_Tenure_Months"},
+                "Engagement_Index": {"Digital_Engagement_Score", "Average_Monthly_Transactions"},
+                "Balance_to_Income_Ratio": {"Average_Monthly_Balance", "Monthly_Income"},
+                "Products_per_Tenure": {"Number_of_Products", "Account_Tenure_Months"},
+                "Recent_Activity_Flag": {"Days_Since_Last_Transaction"},
+                "High_Value_Customer_Flag": {"Average_Monthly_Balance"},
+                "Low_Engagement_Flag": {"Digital_Engagement_Score"},
+            }
             engineered_features = [
-                "Average_Transaction_Value",
-                "Transaction_Activity_Index",
-                "Digital_Banking_Usage",
-                "Complaint_Rate",
-                "Engagement_Index",
-                "Balance_to_Income_Ratio",
-                "Products_per_Tenure",
-                "Recent_Activity_Flag",
-                "High_Value_Customer_Flag",
-                "Low_Engagement_Flag",
+                name for name, requirements in engineered_requirements.items()
+                if requirements.issubset(available_inputs)
             ]
             model_numerical_cols.extend(
                 name for name in engineered_features if name not in model_numerical_cols
