@@ -153,12 +153,27 @@ def money(value):
 
 
 def page_header(kicker, title, subtitle):
+    """Render a high-contrast page banner with inline colours immune to theme inheritance."""
     st.markdown(
-        f'<div class="hero"><div class="eyebrow">{kicker}</div>'
-        f'<h1>{title}</h1><p>{subtitle}</p></div>',
+        f'<div class="hero" style="background:#10243D !important;'
+        f'background-image:linear-gradient(115deg,#10243D 0%,#1C4266 62%,#176E70 100%) !important;'
+        f'color:#FFFFFF !important;padding:30px 34px;border-radius:18px;'
+        f'margin:0 0 24px 0;box-shadow:0 10px 26px rgba(16,36,61,.16);">'
+        f'<div class="eyebrow" style="color:#BFE7F0 !important;'
+        f'font-size:.76rem;font-weight:800;letter-spacing:.13em;'
+        f'text-transform:uppercase;margin:0 0 11px 0;">{kicker}</div>'
+        f'<h1 style="display:block !important;color:#FFFFFF !important;'
+        f'-webkit-text-fill-color:#FFFFFF !important;font-family:Arial,sans-serif !important;'
+        f'font-size:clamp(1.8rem,3vw,2.55rem) !important;line-height:1.18 !important;'
+        f'font-weight:800 !important;letter-spacing:-.025em !important;'
+        f'margin:0 0 10px 0 !important;text-shadow:0 1px 2px rgba(0,0,0,.18);">{title}</h1>'
+        f'<p style="display:block !important;color:#F0F6FC !important;'
+        f'-webkit-text-fill-color:#F0F6FC !important;font-family:Arial,sans-serif !important;'
+        f'font-size:1.05rem !important;line-height:1.55 !important;'
+        f'font-weight:500 !important;margin:0 !important;max-width:900px;">{subtitle}</p>'
+        f'</div>',
         unsafe_allow_html=True,
     )
-
 
 def section(title, note=None):
     st.markdown(f'<div class="section-kicker">Portfolio intelligence</div><h3>{title}</h3>',
