@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import pandas as pd
+from scripts.train_pipeline import clean_data
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "generate_dataset.py"
 SPEC = importlib.util.spec_from_file_location("generate_dataset", SCRIPT)
@@ -30,3 +31,12 @@ def test_quality_issue_injection_is_reproducible_and_preserves_schema():
     assert first["Monthly_Income"].isna().any()
     assert first["Marital_Status"].isna().any()
     assert {"Customer_ID", "Churn", "Customer_Segment", "Branch_Location"}.issubset(first.columns)
+
+
+def test_cleaning_enforces_one_record_per_customer_id():
+    clean = generator.generate_clean_dataset(random_state=42, n=500)
+    raw = generator.inject_data_quality_issues(clean, random_state=42)
+    cleaned = clean_data(raw)
+
+    assert cleaned["Customer_ID"].is_unique
+    assert len(cleaned) == len(clean)
