@@ -269,6 +269,18 @@ def test_model_evaluator_calibration_analysis():
     assert result["bin_count"].sum() == len(y_true)
 
 
+def test_calibration_includes_probability_one_in_final_bin():
+    evaluator = ModelEvaluator()
+    y_true = np.array([0, 1, 1, 0])
+    y_proba = np.array([[1.0, 0.0], [0.0, 1.0], [0.0, 1.0], [1.0, 0.0]])
+
+    result = evaluator.calibration_analysis(y_true, y_proba, n_bins=5)
+
+    assert result["bin_count"].sum() == len(y_true)
+    assert result["bin_count"][-1] == 2
+    assert result["prob_pred"][-1] == 1.0
+
+
 def test_subgroup_performance_suppresses_small_groups():
     evaluator = ModelEvaluator()
     y_true = np.array([0, 1, 0, 1, 1, 0])
