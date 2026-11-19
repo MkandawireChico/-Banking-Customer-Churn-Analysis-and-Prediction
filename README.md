@@ -1,77 +1,179 @@
-# Banking Customer Churn Analysis & Retention Strategy
+# Banking Customer Churn Analysis and Prediction
 
-An end-to-end banking analytics project focused on understanding customer attrition, identifying at-risk relationships and prioritising practical retention activity.
+## Customer Analytics, Churn Prediction & Retention Strategy
 
-The project combines customer-level analysis, reproducible machine learning, explainability, SQL, automated tests and an interactive Streamlit command centre. Monetary values are expressed in **Malawi Kwacha (MWK)**.
+A rigorous, reproducible customer churn prediction project with a modular codebase, comprehensive testing, and business-oriented analysis.
 
-## Project at a glance
-
-| Workstream | Deliverable |
-|---|---|
-| Customer analytics | Demographic, product, branch and behavioural churn analysis |
-| Data engineering | Quality checks, documented cleaning and reusable feature engineering |
-| Predictive modelling | Logistic Regression and Random Forest comparison |
-| Model evaluation | ROC-AUC, precision, recall, F1, calibration, threshold and capacity analysis |
-| Explainability | Permutation importance and customer-level reason codes |
-| Retention operations | Risk bands, prioritised outreach queue and next-best-action guidance |
-| Business intelligence | Interactive Streamlit command centre and Power BI implementation guide |
-| Engineering quality | Modular Python package, pytest suite and GitHub Actions |
-
-## Interactive command centre
-
-Launch the application from the repository root:
+## Quick Start
 
 ```bash
+# Install dependencies
 pip install -r requirements.txt
+
+# Generate synthetic data
 python scripts/generate_dataset.py
+
+# Train the model (reproducible pipeline)
 python scripts/train_pipeline.py
+
+# Run tests
+pytest tests/ -v
+
+# Launch prediction interface
+streamlit run app.py
+
+# Launch the interactive retention command centre
 streamlit run dashboard/streamlit_command_centre.py
 ```
 
-The workspace includes:
-- **Executive Overview:** customer counts, observed churn, high-risk balance exposure, branch and segment comparisons, risk distribution and model validation.
-- **Customer Intelligence:** filterable customer analysis by segment, branch and risk band.
-- **Retention Prioritisation:** capacity-constrained outreach queue with suggested actions and CSV export.
-- **Prediction Lab:** batch scoring for new customer files.
-- **Model Governance:** held-out performance and practical model-use safeguards.
+## Project Overview
 
-The original prediction interface remains available through `streamlit run app.py`.
+This project builds a complete customer-churn analytics workflow for a fictional mid-sized commercial bank in Malawi. It features:
 
-## Model performance
+- **Modular, reusable code** in `src/` with separate modules for data validation, feature engineering, modeling, explainability, and retention recommendations
+- **Leakage-safe feature engineering** using training-set-only statistics
+- **Comprehensive evaluation** with baseline comparison, calibration analysis, and capacity-constrained threshold selection
+- **Model explainability** via permutation importance and rule-based reason codes
+- **Validated risk bands** with observed churn rates on held-out test data
+- **Retention recommendation framework** with actionable priority levels
+- **44 unit tests** covering core functionality
+- **GitHub Actions CI** for automated testing
+- **Streamlit prediction interface** for single and batch predictions
+- **Interactive retention command centre** for executive monitoring, customer intelligence, outreach prioritisation, batch scoring and model governance
+- **Power BI dashboard specification** for business stakeholders
 
-The currently committed training artefact reports the following held-out test results. Re-run the pipeline to refresh these values after changing data, features or model settings.
+## Model Performance (Test Set)
 
-| Metric | Majority baseline | Logistic Regression | Random Forest |
-|---|---:|---:|---:|
+| Metric | Baseline | Logistic Regression | Random Forest |
+|--------|----------|---------------------|---------------|
 | Accuracy | 0.8745 | 0.6777 | 0.7508 |
 | Precision | 0.0000 | 0.2271 | 0.2632 |
 | Recall | 0.0000 | **0.6529** | 0.5478 |
-| F1 score | 0.0000 | 0.3370 | 0.3556 |
+| F1 Score | 0.0000 | 0.3370 | 0.3556 |
 | ROC-AUC | 0.5000 | **0.7417** | 0.7307 |
 
-Logistic Regression is retained as the operating model in the current pipeline because it has the higher recall of the two candidate models. The majority-class baseline illustrates why accuracy alone is not a useful selection criterion for this imbalanced problem.
+**Selected model: Logistic Regression** for higher recall (65.3% vs 0% baseline), meaning it can identify 65% of customers who will churn.
 
-### Risk-band validation
+### Risk Band Calibration (Test Set)
+- **Low Risk:** 3.9% observed churn rate
+- **Medium Risk:** 12.1% observed churn rate  
+- **High Risk:** 33.1% observed churn rate
 
-| Risk band | Observed churn rate |
-|---|---:|
-| Low | 3.9% |
-| Medium | 12.1% |
-| High | 33.1% |
+### Permutation Importance (Top 5)
+1. Days_Since_Last_Transaction: 7.4%
+2. Account_Tenure_Months: 5.3%
+3. Number_of_Complaints: 4.1%
+4. Number_of_Products: 2.9%
+5. Average_Monthly_Deposit: 1.0%
 
-Risk bands are probability groupings, not guarantees about an individual customer. Thresholds should be selected against intervention capacity, costs and measured outcomes.
+## Key Findings
 
-## Selected analytical findings
+1. **Recency is the strongest predictor** - churn rises from 7.5% to 21.7% across days-since-last-transaction quartiles
+2. **Complaints show the steepest gradient** - churn rises from 9.9% (no complaints) to 47.6% (4+ complaints)
+3. **Product count is protective** - single-product customers churn at 16.0% vs 1.7% for customers with 6 products
+4. **Customer value and churn risk are independent** - high-balance customers churn at 12.53%, essentially identical to the 12.55% overall rate
+5. **Risk bands are well-calibrated** - observed churn rates increase monotonically across Low/Medium/High bands
 
-1. **Recency matters:** churn rises across customer inactivity groups, making recent transaction behaviour a useful retention signal.
-2. **Service friction matters:** customers with more complaints show materially higher observed churn.
-3. **Relationship depth is relevant:** customers with more products show lower observed churn in this dataset.
-4. **Customer value is not a substitute for risk:** balance should be considered alongside churn probability rather than used as a proxy for it.
-5. **Capacity changes outcomes:** lowering the outreach threshold increases coverage but also increases the number of customers requiring contact.
+## Repository Structure
 
-## Visual analysis
+```
+banking-customer-churn-analysis/
+├── src/                          # Modular source code
+│   ├── __init__.py
+│   ├── data_validation.py       # Schema checks, data quality validation
+│   ├── feature_engineering.py   # Leakage-safe feature engineering
+│   ├── modeling.py              # Pipeline, evaluation, model comparison
+│   ├── explainability.py        # Permutation importance, explanations
+│   └── retention.py             # Risk bands, retention recommendations
+├── scripts/
+│   ├── generate_dataset.py      # Reproducible synthetic data generator
+│   └── train_pipeline.py        # End-to-end training orchestration
+├── tests/                        # Unit tests (44 tests, 100% passing)
+│   ├── __init__.py
+│   ├── test_data_validation.py
+│   ├── test_feature_engineering.py
+│   └── test_modeling.py
+├── data/
+│   ├── raw/                      # Generated by generate_dataset.py
+│   └── processed/                # Cleaned data and predictions
+├── models/                       # Trained models with metadata
+├── sql/                          # Analysis queries
+├── dashboard/                     # Streamlit command centre and Power BI guide
+│   ├── streamlit_command_centre.py
+│   └── powerbi_dashboard_guide.md
+├── app.py                        # Streamlit prediction interface
+├── requirements.txt
+├── REPRODUCIBILITY.md            # Detailed reproducibility guide
+├── .github/workflows/ci.yml      # GitHub Actions CI
+└── README.md
+```
 
-The repository includes the following analysis outputs:
+## Installation
+
+```bash
+git clone <this-repo>
+cd banking-customer-churn-analysis
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Generate Synthetic Data
+```bash
+python scripts/generate_dataset.py
+```
+Creates `data/raw/churn_customers_synthetic.csv` with 20,200 records and deliberate quality issues.
+
+### Train Model
+```bash
+python scripts/train_pipeline.py
+```
+This script:
+- Loads and validates data
+- Cleans data (removes duplicates, fixes outliers)
+- Performs leakage-safe feature engineering
+- Compares baseline, logistic regression, and random forest
+- Trains selected model (logistic regression)
+- Evaluates on test set
+- Generates threshold and capacity analysis
+- Runs explainability analysis
+- Creates retention analysis
+- Saves model, predictions, and cleaned data
+
+### Run Tests
+```bash
+pytest tests/ -v
+```
+
+### Prediction Interface
+```bash
+streamlit run app.py
+```
+Provides:
+- Single customer prediction with risk factors
+- Batch prediction from CSV upload
+- Model information display
+
+### Retention Command Centre
+
+Launch the interactive portfolio workspace:
+
+```bash
+streamlit run dashboard/streamlit_command_centre.py
+```
+
+It includes five workspaces:
+- **Executive Overview:** portfolio size, observed churn, risk distribution, high-risk balance exposure and branch/segment comparisons.
+- **Customer Intelligence:** customer-level filtering and behavioural analysis.
+- **Retention Prioritisation:** capacity-constrained outreach ranking, recommended next-best actions and CSV export.
+- **Prediction Lab:** batch scoring for new customer CSV files.
+- **Model Governance:** held-out model metrics and responsible-use guidance.
+
+All monetary values are displayed in Malawi Kwacha (MWK). The existing `app.py` prediction interface remains available.
+
+## Visual Analysis
+
+The repository includes exported analytical charts that can be viewed directly in GitHub:
 
 ![Churn across customer profiles](visuals/charts/01_churn_age_gender_segment.png)
 
@@ -89,73 +191,125 @@ The repository includes the following analysis outputs:
 
 ![Feature importance](visuals/charts/11_feature_importance.png)
 
-## Repository structure
-
-```text
-.
-├── .github/workflows/       # Continuous integration
-├── dashboard/
-│   ├── streamlit_command_centre.py
-│   └── powerbi_dashboard_guide.md
-├── data/
-│   ├── raw/                 # Reproducible source dataset
-│   └── processed/           # Cleaned customer and prediction exports
-├── models/                  # Trained model artefacts
-├── notebooks/               # Exploratory analysis notebook
-├── scripts/
-│   ├── generate_dataset.py
-│   └── train_pipeline.py
-├── sql/                     # Business analysis queries and SQLite workspace
-├── src/                     # Validation, features, modelling, explainability, retention
-├── tests/                   # Automated unit tests
-├── visuals/charts/          # Exported analytical charts
-├── app.py                   # Single/batch prediction interface
-├── requirements.txt
-└── README.md
-```
-
-## Reproduce the analysis
-
-Use Python 3.10 or newer.
-
+### SQL Analysis
 ```bash
-git clone https://github.com/MkandawireChico/-Banking-Customer-Churn-Analysis-and-Prediction.git
-cd -Banking-Customer-Churn-Analysis-and-Prediction
-python -m pip install -r requirements.txt
-
-# Generate the source customer dataset
-python scripts/generate_dataset.py
-
-# Validate, clean, train, evaluate and export model outputs
-python scripts/train_pipeline.py
-
-# Run automated tests
-pytest tests/ -v
-
-# Launch the interactive command centre
-streamlit run dashboard/streamlit_command_centre.py
+cd sql
+sqlite3 churn_analysis.db < analysis_queries.sql
 ```
 
-The generator writes to the repository's `data/raw/` directory regardless of the current working directory. Use `--seed`, `--rows` or `--output` to customise a run.
+## Synthetic Data Disclaimer
 
-## SQL analysis
+**This project uses entirely synthetic data created for educational and portfolio purposes.** The fictional bank, customers, figures, model results, and findings do not represent any real commercial bank or actual banking data in Malawi. Nyanja Commercial Bank is a fictional institution used for narrative consistency only.
 
-The `sql/` directory contains reusable queries for churn by segment, branch, customer behaviour and product holdings. See [SQL usage notes](sql/README.md) before running the queries against the included SQLite workspace.
+## Data Quality Issues (Deliberately Injected)
 
-## Methodology and responsible use
+- Missing income (~2%), marital status (~1.5%), internet banking flags (~1.5%)
+- Duplicate records (~1%)
+- Inconsistent segment labels (~1.5%)
+- Implausible ages (values outside 18-90, ~0.2%)
+- Extreme income outliers (10-20x, ~0.3%)
+- Negative transaction counts (~0.3%)
 
-The included customer population is generated reproducibly to demonstrate a complete analytical workflow, including realistic data-quality challenges. The bank and customer records are illustrative, not operational banking records. The model's results should therefore be interpreted as a technical portfolio demonstration rather than evidence about a real institution.
+All issues are handled explicitly in the cleaning pipeline with no silent corrections.
 
-The workflow separates training and test data, fits preprocessing within the training pipeline, and reports held-out performance. Predictions describe statistical risk, not causation or certainty. Human review, privacy safeguards, fairness checks, calibration monitoring and validation on representative real-world data are required before any operational use. No account restriction or adverse customer decision should be made automatically from a churn score.
+## Preventing Data Leakage
 
-## Documentation
+Feature engineering uses **training-set-only statistics** to prevent leakage:
+- Quartiles for flags are computed on training data only
+- Normalization parameters are fit on training data only
+- No test set information is used during training
 
-- [Reproducibility guide](REPRODUCIBILITY.md)
-- [Power BI dashboard implementation guide](dashboard/powerbi_dashboard_guide.md)
-- [SQL analysis guide](sql/README.md)
+## Feature Engineering
+
+| Feature | Definition | Banking Meaning |
+|---------|------------|-----------------|
+| Average_Transaction_Value | Total 6-month value ÷ (monthly transactions × 6) | Typical transaction size |
+| Transaction_Activity_Index | Monthly transactions ÷ (days since last transaction + 1) | Combined activity and recency |
+| Digital_Banking_Usage | Mobile + internet banking flags (0/1/2) | Digital channel adoption breadth |
+| Complaint_Rate | Complaints ÷ years of tenure | Complaints per year of relationship |
+| Engagement_Index | Average of scaled digital score and normalized activity | Composite engagement measure |
+| Balance_to_Income_Ratio | Balance ÷ income | Share of financial life at this bank |
+| Products_per_Tenure | Products ÷ years of tenure | Product adoption rate |
+| Recent_Activity_Flag | 1 if inactive ≤30 days | Actionable recency cutoff |
+| High_Value_Customer_Flag | 1 if balance in top quartile | High-value customer flag |
+| Low_Engagement_Flag | 1 if digital score < 40 | Digital-risk flag |
+
+## Threshold Analysis
+
+| Threshold | Precision | Recall | F1 | Customers Flagged |
+|-----------|-----------|--------|-----|------------------|
+| 0.30 | 0.158 | 0.927 | 0.270 | 73.5% |
+| 0.40 | 0.188 | 0.814 | 0.305 | 54.5% |
+| 0.50 | 0.227 | 0.653 | 0.337 | 36.1% |
+| 0.60 | 0.293 | 0.505 | 0.371 | 21.6% |
+| 0.70 | 0.369 | 0.328 | 0.347 | 11.2% |
+
+**Recommendation:** Threshold 0.30-0.40 is more defensible for retention programs where missed churners are more costly than false positives.
+
+## Capacity Analysis
+
+| Capacity | Precision | Recall | F1 |
+|----------|-----------|--------|-----|
+| 100 | 67.0% | 10.7% | 18.4% |
+| 500 | 38.8% | 30.9% | 34.4% |
+| 1000 | 29.3% | 46.7% | 36.0% |
+| 2000 | 21.7% | 69.1% | 33.0% |
+
+## Retention Recommendations
+
+| Risk + Profile | Recommended Action | Priority |
+|----------------|-------------------|----------|
+| High Risk + High Balance | Priority relationship manager check-in | Critical |
+| High Risk + Multiple Complaints | Customer service intervention | High |
+| High Risk + High Inactivity | Relationship manager outreach | High |
+| High Risk + Low Products | Product education/cross-sell | Medium |
+| High Risk + Low Digital | Digital banking support session | Medium |
+| Medium Risk | Monitor - no immediate action | Low |
+| Low Risk | No action needed | None |
+
+## Power BI Dashboard
+
+See `dashboard/powerbi_dashboard_guide.md` for the complete specification. A runnable Streamlit command centre is also provided in `dashboard/streamlit_command_centre.py`. The Power BI guide includes:
+- 6 pages: Executive Overview, Customer Profile, Churn Drivers, High-Risk Customers, Capacity Analysis, Threshold Analysis
+- DAX measures for key metrics
+- Data model and refresh strategy
+- Key findings to highlight
+
+## Technologies Used
+
+- **Python:** pandas, numpy, scikit-learn, joblib, streamlit, pytest
+- **SQL:** SQLite with CTEs and window functions
+- **CI:** GitHub Actions
+- **Dashboard:** Power BI (specification)
+
+## Reproducibility
+
+See `REPRODUCIBILITY.md` for detailed instructions. Key points:
+- Fixed random seed (42) for data generation
+- Fixed random_state (42) for model training
+- All dependencies pinned in requirements.txt
+- Automated tests verify code correctness
+
+## Limitations
+
+- Cross-sectional synthetic snapshot, not real historical data
+- No genuine time dimension for trend analysis
+- Model performance on real data would likely differ
+- Prediction does not establish causation
+- Findings should be validated with controlled experiments before business action
+
+## Ethical Considerations
+
+This project uses synthetic data for educational purposes. In real deployments, churn models require:
+- Customer privacy and data protection
+- Avoidance of discriminatory outcomes
+- Human review before customer-facing actions
+- Ongoing monitoring and revalidation
+
+**This project does not recommend automatically closing accounts, denying services, or taking punitive action based on churn predictions.**
 
 ## Author
 
-**Chico Mkandawire**  
-MSc Data Science (in progress), Malawi University of Science and Technology  
+Chico Mkandawire
+MSc Data Science, Malawi University of Science and Technology (in progress)
 BSc Management Information Systems, Malawi University of Business and Applied Sciences
