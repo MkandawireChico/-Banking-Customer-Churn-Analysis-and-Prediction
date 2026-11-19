@@ -36,55 +36,62 @@ def apply_theme():
         """
         <style>
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
-        html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-        .stApp { background: #F4F7FB; }
-        [data-testid="stSidebar"] { background: #10243D; }
-        [data-testid="stSidebar"] * { color: #EAF1F8 !important; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 8px 10px; border-radius: 8px; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #203B5B; }
+        :root { color-scheme: light !important; }
+        html, body, [data-testid="stAppViewContainer"], .stApp,
+        [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
+            background: #F3F6FA !important; color: #20334A !important;
+            font-family: 'DM Sans', sans-serif !important;
+        }
+        [data-testid="stHeader"] { background: #F3F6FA !important; }
+        [data-testid="stSidebar"], [data-testid="stSidebar"] > div { background: #10243D !important; }
+        [data-testid="stSidebar"] * { color: #F2F6FB !important; }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 9px 11px; border-radius: 8px; color: #F2F6FB !important; }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #203B5B !important; }
         .block-container { padding-top: 2rem; padding-bottom: 2.5rem; max-width: 1500px; }
-        /* Explicit foreground colours prevent theme-dependent, low-contrast headings. */
-        .stApp, .stApp p, .stApp label, .stApp [data-testid="stMarkdownContainer"],
-        .stApp [data-testid="stMarkdownContainer"] p,
-        .stApp [data-testid="stMarkdownContainer"] li { color: #24364B; }
+        .stApp p, .stApp label, .stApp li, .stApp [data-testid="stMarkdownContainer"],
+        .stApp [data-testid="stMarkdownContainer"] p, .stApp [data-testid="stMarkdownContainer"] li,
+        .stApp [data-testid="stCaptionContainer"] { color: #263B53 !important; }
         .stApp h1, .stApp h2, .stApp h3, .stApp h4,
-        .stApp [data-testid="stMarkdownContainer"] h1,
-        .stApp [data-testid="stMarkdownContainer"] h2,
-        .stApp [data-testid="stMarkdownContainer"] h3,
-        .stApp [data-testid="stMarkdownContainer"] h4 {
-            color: #142B4A !important;
-            font-family: 'Manrope', sans-serif;
-            letter-spacing: -0.025em;
-            font-weight: 750;
+        .stApp [data-testid="stMarkdownContainer"] h1, .stApp [data-testid="stMarkdownContainer"] h2,
+        .stApp [data-testid="stMarkdownContainer"] h3, .stApp [data-testid="stMarkdownContainer"] h4 {
+            color: #142B4A !important; font-family: 'Manrope', sans-serif !important;
+            letter-spacing: -0.025em; font-weight: 800 !important;
         }
-        .stApp [data-testid="stWidgetLabel"] p,
-        .stApp [data-testid="stWidgetLabel"] label,
-        .stApp [data-testid="stCaptionContainer"] {
-            color: #43566D !important;
-        }
-        .stApp [data-testid="stMetricLabel"] *,
+        .stApp [data-testid="stWidgetLabel"] *, .stApp [data-testid="stMetricLabel"] *,
         .stApp [data-testid="stMetricValue"] * { color: #142B4A !important; }
-        .stApp input, .stApp textarea, .stApp [data-baseweb="select"] *,
-        .stApp [data-baseweb="input"] * { color: #24364B; }
+        .stApp input, .stApp textarea, .stApp [data-baseweb="select"] *, .stApp [data-baseweb="input"] * {
+            color: #20334A !important; background-color: #FFFFFF !important;
+        }
+        .stApp [data-baseweb="select"] > div, .stApp [data-baseweb="input"] > div {
+            background: #FFFFFF !important; border-color: #C9D5E2 !important;
+        }
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 { color: #FFFFFF !important; }
-        h1 { font-weight: 800; }
-        [data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #E4EAF1; padding: 17px 19px; border-radius: 13px; box-shadow: 0 2px 8px rgba(20,43,74,.035); }
-        [data-testid="stMetricLabel"] { color: #64748B; font-size: .82rem; }
-        [data-testid="stMetricValue"] { color: #142B4A; font-family: 'Manrope', sans-serif; }
-        [data-testid="stDataFrame"], [data-testid="stTable"] { border: 1px solid #E4EAF1; border-radius: 12px; overflow: hidden; }
-        div[data-testid="stVerticalBlock"] div[data-testid="stAlert"] { border-radius: 10px; }
-        .hero { background: linear-gradient(115deg, #10243D 0%, #1C4266 62%, #287C83 100%); padding: 28px 32px; border-radius: 18px; color: white; margin-bottom: 22px; box-shadow: 0 12px 28px rgba(16,36,61,.12); }
-        .hero h1 { color: white !important; font-size: 2rem; margin: 0 0 7px 0; }
-        .hero p { color: #DCE8F3; margin: 0; font-size: .98rem; }
-        .eyebrow { color: #9FC6D7; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 700; margin-bottom: 9px; }
-        .section-kicker { color: #2F6B9A; text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 700; margin-bottom: 4px; }
-        .insight { background: white; border: 1px solid #E4EAF1; border-left: 4px solid #2B8C82; border-radius: 10px; padding: 14px 16px; min-height: 92px; }
-        .insight strong { color: #142B4A; display: block; margin-bottom: 4px; }
-        .insight span { color: #64748B; font-size: .88rem; }
+        [data-testid="stMetric"] {
+            background: #FFFFFF !important; border: 1px solid #DCE5EF !important;
+            padding: 17px 19px; border-radius: 13px; box-shadow: 0 2px 8px rgba(20,43,74,.055);
+        }
+        [data-testid="stMetricLabel"] { color: #52657B !important; font-size: .82rem; }
+        [data-testid="stMetricValue"] { color: #142B4A !important; font-family: 'Manrope', sans-serif; }
+        [data-testid="stDataFrame"], [data-testid="stTable"] {
+            background: #FFFFFF !important; border: 1px solid #DCE5EF; border-radius: 12px; overflow: hidden;
+        }
+        [data-testid="stAlert"] { border-radius: 10px; }
+        .hero {
+            background: linear-gradient(115deg, #10243D 0%, #1C4266 62%, #287C83 100%);
+            padding: 28px 32px; border-radius: 18px; color: #FFFFFF; margin-bottom: 22px;
+            box-shadow: 0 12px 28px rgba(16,36,61,.12);
+        }
+        .hero h1 { color: #FFFFFF !important; font-size: 2rem; margin: 0 0 7px 0; }
+        .hero p { color: #E7F0F8 !important; margin: 0; font-size: .98rem; }
+        .eyebrow { color: #B9DCE8; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 700; margin-bottom: 9px; }
+        .section-kicker { color: #24658E !important; text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 700; margin-bottom: 4px; }
+        .insight { background: #FFFFFF; border: 1px solid #DCE5EF; border-left: 4px solid #23877D; border-radius: 10px; padding: 14px 16px; min-height: 92px; }
+        .insight strong { color: #142B4A !important; display: block; margin-bottom: 4px; }
+        .insight span { color: #52657B !important; font-size: .88rem; }
         .risk-pill { display: inline-block; padding: 4px 9px; border-radius: 99px; font-size: .75rem; font-weight: 700; }
-        .footer { color: #8492A6; font-size: .78rem; border-top: 1px solid #E3EAF2; padding-top: 15px; margin-top: 28px; }
+        .footer { color: #66788D !important; font-size: .78rem; border-top: 1px solid #DCE5EF; padding-top: 15px; margin-top: 28px; }
         </style>
         """,
         unsafe_allow_html=True,
