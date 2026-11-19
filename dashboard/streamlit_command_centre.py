@@ -43,10 +43,10 @@ def apply_theme():
             font-family: 'DM Sans', sans-serif !important;
         }
         [data-testid="stHeader"] { background: #F3F6FA !important; }
-        [data-testid="stSidebar"], [data-testid="stSidebar"] > div { background: #10243D !important; }
-        [data-testid="stSidebar"] * { color: #F2F6FB !important; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 9px 11px; border-radius: 8px; color: #F2F6FB !important; }
-        [data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #203B5B !important; }
+        [data-testid="stSidebar"], [data-testid="stSidebar"] > div { background: #FFFFFF !important; border-right: 1px solid #DCE5EF !important; }
+        [data-testid="stSidebar"] * { color: #20334A !important; }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label { padding: 9px 11px; border-radius: 8px; color: #20334A !important; }
+        [data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #EAF2F8 !important; }
         .block-container { padding-top: 2rem; padding-bottom: 2.5rem; max-width: 1500px; }
         .stApp p, .stApp label, .stApp li, .stApp [data-testid="stMarkdownContainer"],
         .stApp [data-testid="stMarkdownContainer"] p, .stApp [data-testid="stMarkdownContainer"] li,
@@ -67,7 +67,7 @@ def apply_theme():
         }
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
-        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 { color: #FFFFFF !important; }
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 { color: #142B4A !important; }
         [data-testid="stMetric"] {
             background: #FFFFFF !important; border: 1px solid #DCE5EF !important;
             padding: 17px 19px; border-radius: 13px; box-shadow: 0 2px 8px rgba(20,43,74,.055);
@@ -79,13 +79,13 @@ def apply_theme():
         }
         [data-testid="stAlert"] { border-radius: 10px; }
         .hero {
-            background: linear-gradient(115deg, #10243D 0%, #1C4266 62%, #287C83 100%);
-            padding: 28px 32px; border-radius: 18px; color: #FFFFFF; margin-bottom: 22px;
-            box-shadow: 0 12px 28px rgba(16,36,61,.12);
+            background: linear-gradient(115deg, #E7F0F8 0%, #F5F8FC 62%, #E4F2F0 100%);
+            padding: 28px 32px; border-radius: 18px; color: #142B4A; margin-bottom: 22px;
+            border: 1px solid #DCE5EF; box-shadow: 0 8px 22px rgba(20,43,74,.06);
         }
-        .hero h1 { color: #FFFFFF !important; font-size: 2rem; margin: 0 0 7px 0; }
-        .hero p { color: #E7F0F8 !important; margin: 0; font-size: .98rem; }
-        .eyebrow { color: #B9DCE8; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 700; margin-bottom: 9px; }
+        .hero h1 { color: #142B4A !important; font-size: 2rem; margin: 0 0 7px 0; }
+        .hero p { color: #52657B !important; margin: 0; font-size: .98rem; }
+        .eyebrow { color: #2F6B9A; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 700; margin-bottom: 9px; }
         .section-kicker { color: #24658E !important; text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 700; margin-bottom: 4px; }
         .insight { background: #FFFFFF; border: 1px solid #DCE5EF; border-left: 4px solid #23877D; border-radius: 10px; padding: 14px 16px; min-height: 92px; }
         .insight strong { color: #142B4A !important; display: block; margin-bottom: 4px; }
@@ -153,22 +153,22 @@ def money(value):
 
 
 def page_header(kicker, title, subtitle):
-    """Render a high-contrast page banner with inline colours immune to theme inheritance."""
+    """Render a clean light-theme page banner with strong text contrast."""
     st.markdown(
-        f'<div class="hero" style="background:#10243D !important;'
-        f'background-image:linear-gradient(115deg,#10243D 0%,#1C4266 62%,#176E70 100%) !important;'
-        f'color:#FFFFFF !important;padding:30px 34px;border-radius:18px;'
-        f'margin:0 0 24px 0;box-shadow:0 10px 26px rgba(16,36,61,.16);">'
-        f'<div class="eyebrow" style="color:#BFE7F0 !important;'
+        f'<div class="hero" style="background:#EAF2F8 !important;'
+        f'background-image:linear-gradient(115deg,#E7F0F8 0%,#F7F9FC 62%,#E6F3F0 100%) !important;'
+        f'color:#142B4A !important;padding:30px 34px;border-radius:18px;'
+        f'margin:0 0 24px 0;border:1px solid #DCE5EF;box-shadow:0 8px 22px rgba(20,43,74,.06);">'
+        f'<div class="eyebrow" style="color:#2F6B9A !important;'
         f'font-size:.76rem;font-weight:800;letter-spacing:.13em;'
         f'text-transform:uppercase;margin:0 0 11px 0;">{kicker}</div>'
-        f'<h1 style="display:block !important;color:#FFFFFF !important;'
-        f'-webkit-text-fill-color:#FFFFFF !important;font-family:Arial,sans-serif !important;'
+        f'<h1 style="display:block !important;color:#142B4A !important;'
+        f'-webkit-text-fill-color:#142B4A !important;font-family:Arial,sans-serif !important;'
         f'font-size:clamp(1.8rem,3vw,2.55rem) !important;line-height:1.18 !important;'
         f'font-weight:800 !important;letter-spacing:-.025em !important;'
-        f'margin:0 0 10px 0 !important;text-shadow:0 1px 2px rgba(0,0,0,.18);">{title}</h1>'
-        f'<p style="display:block !important;color:#F0F6FC !important;'
-        f'-webkit-text-fill-color:#F0F6FC !important;font-family:Arial,sans-serif !important;'
+        f'margin:0 0 10px 0 !important;">{title}</h1>'
+        f'<p style="display:block !important;color:#52657B !important;'
+        f'-webkit-text-fill-color:#52657B !important;font-family:Arial,sans-serif !important;'
         f'font-size:1.05rem !important;line-height:1.55 !important;'
         f'font-weight:500 !important;margin:0 !important;max-width:900px;">{subtitle}</p>'
         f'</div>',
@@ -732,8 +732,8 @@ def main():
         st.markdown(
             '<div style="padding:8px 2px 18px 2px">'
             '<div style="font-size:1.8rem">🏦</div>'
-            '<div style="font-family:Manrope;font-weight:800;font-size:1.05rem;color:#FFFFFF">NYANJA COMMERCIAL BANK</div>'
-            '<div style="font-size:.76rem;color:#AFC4D8">CUSTOMER INTELLIGENCE SUITE</div></div>',
+            '<div style="font-family:Manrope;font-weight:800;font-size:1.05rem;color:#142B4A">NYANJA COMMERCIAL BANK</div>'
+            '<div style="font-size:.76rem;color:#64748B">CUSTOMER INTELLIGENCE SUITE</div></div>',
             unsafe_allow_html=True,
         )
         st.divider()
