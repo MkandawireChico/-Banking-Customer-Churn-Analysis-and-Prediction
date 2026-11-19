@@ -26,13 +26,28 @@ def load_data():
     if score_file.exists():
         scores = pd.read_csv(score_file)
         score_scope = "Full population"
-    elif test_file.exists():
-        # Backward-compatible fallback for repository checkouts made before
-        # the full-population score export was introduced.
-        scores = pd.read_csv(test_file)
-        score_scope = "Held-out test cohort (fallback)"
     else:
-        return None
+        # Streamlit deployments may not have the optional full-population
+        # score export. Recreate it from the committed model and cleaned
+        # customer cohort so the retention queue still covers every customer.
+        model, _ = load_model()
+        if model is not None:
+            features = customers[model.feature_names_in_]
+            probabilities = model.predict_proba(features)[:, 1]
+            scores = pd.DataFrame({
+                "Customer_ID": customers["Customer_ID"].values,
+                "Churn_Probability": probabilities,
+                "Predicted_Churn_0.50": (probabilities >= 0.50).astype(int),
+            })
+            scores["Risk_Band"] = scores["Churn_Probability"].apply(
+                RetentionRecommender().assign_risk_band
+            )
+            score_scope = "Full population (scored at runtime)"
+        elif test_file.exists():
+            scores = pd.read_csv(test_file)
+            score_scope = "Held-out test cohort (fallback)"
+        else:
+            return None
     customers = pd.read_csv(customer_file).drop_duplicates(subset=["Customer_ID"], keep="first")
     data = scores.merge(customers, on="Customer_ID", how="left", suffixes=("", "_profile"))
     data["Score_Scope"] = score_scope
