@@ -39,14 +39,29 @@ jobs:
     - name: Lint with flake8
       run: |
         # Stop the build if there are Python syntax errors or undefined names
-        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/ scripts/ dashboard/ --count --select=E9,F63,F7,F82 --show-source --statistics
         # Exit-zero treats all errors as warnings
-        flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 src/ scripts/ dashboard/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     
     - name: Run tests with pytest
       run: |
         pytest tests/ --cov=src --cov-report=xml --cov-report=term-missing --verbose
     
+
+    - name: Validate notebook structure and code syntax
+      run: |
+        python - <<'PY'
+        import ast
+        import nbformat
+
+        notebook = nbformat.read("notebooks/customer_churn_analysis.ipynb", as_version=4)
+        nbformat.validate(notebook)
+        for index, cell in enumerate(notebook.cells):
+            if cell.cell_type == "code":
+                ast.parse(cell.source, filename=f"notebook cell {index}")
+        print(f"Validated {len(notebook.cells)} notebook cells.")
+        PY
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
@@ -54,3 +69,58 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  pipeline-smoke:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install project dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Generate a compact reproducible customer cohort
+      run: python scripts/generate_dataset.py --rows 3000
+
+    - name: Train the complete pipeline and export dashboard data
+      run: python scripts/train_pipeline.py
+
+    - name: Verify model and dashboard artefacts
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import pandas as pd
+
+        root = Path(".")
+        model = root / "models" / "logistic_regression_pipeline.joblib"
+        clean = pd.read_csv(root / "data/processed/churn_customers_clean.csv")
+        test = pd.read_csv(root / "data/processed/churn_predictions.csv")
+        scores = pd.read_csv(root / "data/processed/churn_customer_scores.csv")
+
+        assert model.exists(), "Trained model artefact was not created"
+        assert len(scores) == len(clean), "Portfolio scores must cover every cleaned customer"
+        assert len(test) < len(clean), "Held-out predictions should remain a separate subset"
+        assert scores["Customer_ID"].is_unique, "Portfolio scores must have unique customer IDs"
+        assert scores["Churn_Probability"].between(0, 1).all(), "Invalid churn probabilities"
+        assert set(scores["Risk_Band"].unique()).issubset({"Low Risk", "Medium Risk", "High Risk"})
+        print(f"Verified {len(scores):,} full-population scores and {len(test):,} held-out predictions.")
+        PY
+
+    - name: Smoke-test dashboard rendering and retention queue
+      run: |
+        python - <<'PY'
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file("dashboard/streamlit_command_centre.py", default_timeout=60).run()
+        assert not app.exception, app.exception
+
+        app.radio[0].set_value("Retention Prioritisation").run()
+        assert not app.exception, app.exception
+        print("Dashboard overview and full-population retention queue rendered successfully.")
+        PY

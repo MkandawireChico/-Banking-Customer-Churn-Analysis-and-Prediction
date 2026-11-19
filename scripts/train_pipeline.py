@@ -44,7 +44,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     Clean the dataset following the documented methodology.
     
     This function:
-    - Drops exact duplicates
+    - Drops repeated customer IDs (including exact duplicate rows)
     - Standardizes categorical labels
     - Treats implausible ages as missing
     - Treats negative transaction counts as missing
@@ -54,10 +54,12 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     print("\n=== Data Cleaning ===")
     df = df.copy()
     
-    # 1. Drop exact duplicates
+    # 1. Enforce one record per customer. Some injected duplicate rows are
+    # subsequently altered by other quality injections, so exact-row deduping
+    # alone would leave conflicting records for the same customer ID.
     before = len(df)
-    df = df.drop_duplicates()
-    print(f"Dropped {before - len(df):,} duplicate rows -> {len(df):,} remaining")
+    df = df.drop_duplicates(subset=["Customer_ID"], keep="first")
+    print(f"Dropped {before - len(df):,} duplicate customer records -> {len(df):,} remaining")
     
     # 2. Standardize Customer_Segment labels
     segment_fix_map = {
@@ -282,21 +284,37 @@ def main():
         "Predicted_Churn_0.50": y_pred,
     })
     
-    # Add risk bands
-    predictions_df["Risk_Band"] = pd.cut(
-        predictions_df["Churn_Probability"],
-        bins=[0, 0.33, 0.66, 1.0],
-        labels=["Low Risk", "Medium Risk", "High Risk"]
+    # Keep the held-out test predictions separate for honest model evaluation.
+    risk_recommender = RetentionRecommender()
+    predictions_df["Risk_Band"] = predictions_df["Churn_Probability"].apply(
+        risk_recommender.assign_risk_band
     )
-    
-    predictions_path = output_dir.parent / "data" / "processed" / "churn_predictions.csv"
-    predictions_path.parent.mkdir(parents=True, exist_ok=True)
+
+    processed_dir = output_dir.parent / "data" / "processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    predictions_path = processed_dir / "churn_predictions.csv"
     predictions_df.to_csv(predictions_path, index=False)
-    print(f"Predictions saved to {predictions_path}")
+    print(f"Held-out test predictions saved to {predictions_path}")
+
+    # Score the complete cleaned customer population for portfolio monitoring
+    # and capacity-constrained retention prioritisation. These are in-sample
+    # portfolio scores, not an independent evaluation of model performance.
+    portfolio_probabilities = selected_pipeline.predict_proba(X)[:, 1]
+    portfolio_scores = pd.DataFrame({
+        "Customer_ID": df_clean["Customer_ID"].values,
+        "Churn_Probability": portfolio_probabilities,
+        "Predicted_Churn_0.50": (portfolio_probabilities >= 0.50).astype(int),
+    })
+    portfolio_scores["Risk_Band"] = portfolio_scores["Churn_Probability"].apply(
+        risk_recommender.assign_risk_band
+    )
+    portfolio_path = processed_dir / "churn_customer_scores.csv"
+    portfolio_scores.to_csv(portfolio_path, index=False)
+    print(f"Full-population customer scores saved to {portfolio_path}")
     
     # 13. Retention analysis
     print("\n=== Retention Analysis ===")
-    recommender = RetentionRecommender()
+    recommender = risk_recommender
     retention_report = generate_retention_report(predictions_df)
     print(retention_report)
     

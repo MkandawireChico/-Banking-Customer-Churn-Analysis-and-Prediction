@@ -3,7 +3,7 @@
 ## Overview
 This document specifies the Power BI dashboard for the Banking Customer Churn Analysis project. The dashboard is designed to provide business stakeholders with actionable insights into customer churn risk and retention opportunities.
 
-**Note:** This is a specification document. The actual Power BI dashboard is not implemented in this repository. This specification can be used as a guide for building the dashboard in Power BI Desktop.
+**Implementation status:** This guide remains the Power BI build specification. The repository also includes a runnable Streamlit command centre at `dashboard/streamlit_command_centre.py` for executive overview, customer intelligence, retention prioritisation, batch scoring and model governance.
 
 ## Data Sources
 

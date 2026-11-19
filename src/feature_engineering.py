@@ -147,19 +147,26 @@ class FeatureEngineer(BaseEstimator, TransformerMixin):
         return X
     
     def get_feature_names_out(self, input_features=None):
-        """Get output feature names for scikit-learn compatibility."""
-        return [
-            "Average_Transaction_Value",
-            "Transaction_Activity_Index",
-            "Digital_Banking_Usage",
-            "Complaint_Rate",
-            "Engagement_Index",
-            "Balance_to_Income_Ratio",
-            "Products_per_Tenure",
-            "Recent_Activity_Flag",
-            "High_Value_Customer_Flag",
-            "Low_Engagement_Flag"
-        ]
+        """Return preserved inputs and only derived columns supported by those inputs."""
+        requirements = {
+            "Average_Transaction_Value": {"Total_Transaction_Value_Last_6_Months", "Average_Monthly_Transactions"},
+            "Transaction_Activity_Index": {"Average_Monthly_Transactions", "Days_Since_Last_Transaction"},
+            "Digital_Banking_Usage": {"Has_Mobile_Banking", "Has_Internet_Banking"},
+            "Complaint_Rate": {"Number_of_Complaints", "Account_Tenure_Months"},
+            "Engagement_Index": {"Digital_Engagement_Score", "Average_Monthly_Transactions"},
+            "Balance_to_Income_Ratio": {"Average_Monthly_Balance", "Monthly_Income"},
+            "Products_per_Tenure": {"Number_of_Products", "Account_Tenure_Months"},
+            "Recent_Activity_Flag": {"Days_Since_Last_Transaction"},
+            "High_Value_Customer_Flag": {"Average_Monthly_Balance"},
+            "Low_Engagement_Flag": {"Digital_Engagement_Score"},
+        }
+        original = list(input_features) if input_features is not None else []
+        if input_features is None:
+            derived = list(requirements)
+        else:
+            available = set(original)
+            derived = [name for name, required in requirements.items() if required.issubset(available)]
+        return np.asarray(original + [name for name in derived if name not in original], dtype=object)
 
 
 def get_feature_definitions() -> Dict[str, Dict[str, str]]:
@@ -191,7 +198,7 @@ def get_feature_definitions() -> Dict[str, Dict[str, str]]:
         "Complaint_Rate": {
             "formula": "Number_of_Complaints / (Account_Tenure_Months / 12)",
             "meaning": "Complaints per year of relationship - normalizes for relationship length",
-            "edge_cases": "Tenure clipped at最低 0.1 years to prevent division by zero",
+            "edge_cases": "Tenure clipped at a minimum of 0.1 years to prevent division by zero",
             "availability": "Available at prediction time"
         },
         "Engagement_Index": {

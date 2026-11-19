@@ -267,7 +267,7 @@ def get_shap_explanations(
 
 
 def generate_explanation_report(
-    model: BaseEstainer,
+    model: BaseEstimator,
     X_train: pd.DataFrame,
     y_train: pd.Series,
     feature_names: List[str],

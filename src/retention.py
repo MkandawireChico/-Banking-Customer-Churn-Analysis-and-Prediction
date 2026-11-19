@@ -37,10 +37,14 @@ class RetentionRecommender:
         Returns:
             Risk band label
         """
+        probability = float(probability)
+        if not np.isfinite(probability) or not 0.0 <= probability <= 1.0:
+            raise ValueError("Churn probability must be a finite value between 0 and 1.")
+
         for band, (low, high) in self.risk_band_thresholds.items():
             if low <= probability < high:
                 return band
-        return 'High Risk'  # Default for probability >= 0.66
+        return 'High Risk'  # Includes the upper boundary of 1.0
     
     def validate_risk_bands(
         self,
