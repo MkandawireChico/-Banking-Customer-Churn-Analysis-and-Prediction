@@ -517,11 +517,27 @@ def retention_prioritisation(data):
 def prediction_lab():
     page_header("Scenario testing  /  Batch scoring",
                 "Prediction Lab",
-                "Score a new customer file and produce a ranked, downloadable risk assessment.")
-    model, _ = load_model()
+                "Review the model's independent validation evidence, then score a new customer file.")
+    model, metadata = load_model()
     if model is None:
         st.warning("Trained model not found. Run scripts/train_pipeline.py first.")
         return
+
+    metrics = metadata.get("test_metrics", {})
+    if metrics:
+        section("Model validation reference", "Final metrics below are from the untouched held-out test partition.")
+        validation_cols = st.columns(5)
+        for col, key, label in zip(
+            validation_cols, ["roc_auc", "average_precision", "recall", "precision", "f1"],
+            ["ROC-AUC", "PR-AUC (average precision)", "Recall", "Precision", "F1 score"],
+        ):
+            value = metrics.get(key)
+            col.metric(label, f"{value:.1%}" if isinstance(value, (int, float)) else "—")
+        st.caption(
+            "These metrics describe historical test-set performance, not guaranteed future accuracy. "
+            "Threshold scenarios are kept separate and are calculated on a validation split from training data."
+        )
+
     upload = st.file_uploader("Upload customer data (CSV)", type=["csv"])
     st.caption("Required fields are the same raw customer attributes used during model training.")
     if upload is None:
@@ -686,16 +702,49 @@ def model_governance(metadata):
     st.dataframe(metric_frame.style.format({"Value": "{:.3f}"}),
                  use_container_width=True, hide_index=True)
 
+    confusion = metadata.get("test_confusion_matrix")
+    if confusion and len(confusion) == 2:
+        section("Test-set confusion matrix", "Fixed 0.50 decision threshold. Rows are actual outcomes; columns are model predictions.")
+        cm = pd.DataFrame(confusion, index=["Actual: retained", "Actual: churn"], columns=["Predicted: retained", "Predicted: churn"])
+        st.dataframe(cm, use_container_width=True)
+        counts = metadata.get("test_confusion_counts", {})
+        count_cols = st.columns(4)
+        for col, key, label in zip(
+            count_cols, ["true_negatives", "false_positives", "false_negatives", "true_positives"],
+            ["Correctly retained", "False alarms", "Missed churners", "Churners identified"],
+        ):
+            col.metric(label, f"{counts.get(key, 0):,}")
+
+    pr_curve = metadata.get("pr_curve", {})
+    if pr_curve.get("precision") and pr_curve.get("recall"):
+        section("Precision–recall curve", "More informative than accuracy when churn is the minority class.")
+        fig, ax = plt.subplots(figsize=(8, 3.5))
+        ax.plot(pr_curve["recall"], pr_curve["precision"], color=BLUE, linewidth=2.2)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1.02)
+        ax.set_xlabel("Recall")
+        ax.set_ylabel("Precision")
+        ax.grid(alpha=.2, linestyle="--")
+        ax.spines[["top", "right", "left"]].set_visible(False)
+        fig.tight_layout()
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
+
     threshold = metadata.get("threshold_analysis", {})
     if threshold:
         threshold_frame = pd.DataFrame(threshold)
         if {"threshold", "precision", "recall"}.issubset(threshold_frame.columns):
-            section("Decision-threshold trade-off", "Changing the threshold changes outreach volume and missed churn risk.")
+            section("Decision-threshold scenarios", metadata.get(
+                "threshold_analysis_source",
+                "Threshold scenarios are for decision support; do not optimise on the final test set.",
+            ))
             fig, ax = plt.subplots(figsize=(8, 3.2))
             ax.plot(threshold_frame["threshold"], threshold_frame["precision"],
                     marker="o", linewidth=2, label="Precision", color=BLUE)
             ax.plot(threshold_frame["threshold"], threshold_frame["recall"],
                     marker="o", linewidth=2, label="Recall", color=TEAL)
+            ax.plot(threshold_frame["threshold"], threshold_frame["f1"],
+                    marker="o", linewidth=2, label="F1 score", color=GOLD)
             ax.set_ylim(0, 1)
             ax.set_xlabel("Probability threshold")
             ax.set_ylabel("Metric")
@@ -705,6 +754,56 @@ def model_governance(metadata):
             fig.tight_layout()
             st.pyplot(fig, use_container_width=True)
             plt.close(fig)
+            st.dataframe(threshold_frame.style.format({
+                "threshold": "{:.2f}", "precision": "{:.1%}", "recall": "{:.1%}",
+                "f1": "{:.1%}", "share_flagged": "{:.1%}",
+            }), use_container_width=True, hide_index=True)
+
+    cv_results = metadata.get("cross_validation", {})
+    if cv_results:
+        section("Training-only cross-validation", "Five stratified folds on the training partition. The held-out test set is not used here.")
+        cv_rows = []
+        for metric_name, result in cv_results.items():
+            cv_rows.append({
+                "Metric": metric_name.replace("_", " ").title(),
+                "Mean": result.get("mean"),
+                "Standard deviation": result.get("std"),
+                "Minimum fold": result.get("min"),
+                "Maximum fold": result.get("max"),
+            })
+        st.dataframe(pd.DataFrame(cv_rows).style.format({
+            "Mean": "{:.3f}", "Standard deviation": "{:.3f}",
+            "Minimum fold": "{:.3f}", "Maximum fold": "{:.3f}",
+        }), use_container_width=True, hide_index=True)
+
+    calibration = metadata.get("calibration_curve", {})
+    if calibration.get("prob_true") and calibration.get("prob_pred"):
+        section("Probability calibration", "Observed churn frequency versus average predicted probability within fixed-width bins.")
+        observed = calibration["prob_true"]
+        predicted = calibration["prob_pred"]
+        fig, ax = plt.subplots(figsize=(7, 3.5))
+        ax.plot([0, 1], [0, 1], linestyle="--", color=MUTED, label="Perfect calibration")
+        ax.plot(predicted, observed, marker="o", color=TEAL, linewidth=2, label="Model")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel("Mean predicted probability")
+        ax.set_ylabel("Observed churn rate")
+        ax.grid(alpha=.2, linestyle="--")
+        ax.legend(frameon=False)
+        fig.tight_layout()
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
+
+    subgroup = metadata.get("subgroup_metrics", {})
+    for group_column, rows in subgroup.items():
+        if rows:
+            section(f"Hold-out performance by {group_column.replace('_', ' ').lower()}",
+                    "Descriptive comparisons only. Groups with fewer than 50 test customers are suppressed.")
+            group_frame = pd.DataFrame(rows)
+            st.dataframe(group_frame.style.format({
+                "churn_rate": "{:.1%}", "precision": "{:.1%}",
+                "recall": "{:.1%}", "f1": "{:.1%}",
+            }), use_container_width=True, hide_index=True)
 
     ece = metadata.get("calibration_ece")
     if ece is not None:
