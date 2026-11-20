@@ -20,6 +20,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -215,25 +216,55 @@ def main():
     )
     print(comparison_df.round(4))
 
-    # Fit a validation-only model for threshold scenario analysis.
+    # Keep Logistic Regression as the current operating candidate because the
+    # initial retention use case prioritises recall. The validation comparison
+    # remains visible; a final economic choice needs outreach costs and capacity.
+    selected_model_type = "logistic"
+
+    # Fit and calibrate on the fit partition only, then use the untouched
+    # validation partition for threshold scenarios.
     validation_pipeline = ChurnModelPipeline(
-        model_type="logistic", random_state=args.random_state, class_weight="balanced"
+        model_type=selected_model_type, random_state=args.random_state, class_weight="balanced"
     )
     validation_pipeline.fit(X_fit, y_fit, numerical_cols, categorical_cols)
-    validation_proba = validation_pipeline.predict_proba(X_validation)
+    validation_calibrator = CalibratedClassifierCV(
+        estimator=validation_pipeline.pipeline, method="sigmoid", cv=5
+    )
+    validation_calibrator.fit(X_fit, y_fit)
+    validation_proba = validation_calibrator.predict_proba(X_validation)
 
-    # 8. Refit the production candidate on the complete training partition.
-    print("\n=== Training Selected Model (Logistic Regression) ===")
+    # 8. Refit the selected base model on the complete training partition.
+    print(f"\n=== Training Selected Model ({selected_model_type}) ===")
     selected_pipeline = ChurnModelPipeline(
-        model_type="logistic",
+        model_type=selected_model_type,
         random_state=args.random_state,
         class_weight="balanced"
     )
     selected_pipeline.fit(X_train, y_train, numerical_cols, categorical_cols)
-    
-    # 8. Evaluate on test set
-    print("\n=== Test Set Evaluation ===")
+    base_pipeline = selected_pipeline.pipeline
+
+    # Cross-validation measures the selected base model using training data only.
     evaluator = ModelEvaluator()
+    print("\n=== Training-Only Stratified Cross-Validation ===")
+    cv_roc_auc = evaluator.cross_validate(
+        base_pipeline, X_train, y_train, cv=5, scoring="roc_auc"
+    )
+    cv_average_precision = evaluator.cross_validate(
+        base_pipeline, X_train, y_train, cv=5, scoring="average_precision"
+    )
+    print(f"ROC-AUC: {cv_roc_auc['mean']:.4f} +/- {cv_roc_auc['std']:.4f}")
+    print(f"Average precision: {cv_average_precision['mean']:.4f} +/- {cv_average_precision['std']:.4f}")
+
+    # Sigmoid calibration is learned only from training folds. The final test
+    # partition remains untouched until the one-time evaluation below.
+    calibrated_pipeline = CalibratedClassifierCV(
+        estimator=base_pipeline, method="sigmoid", cv=5
+    )
+    calibrated_pipeline.fit(X_train, y_train)
+    selected_pipeline.pipeline = calibrated_pipeline
+
+    # 9. Evaluate the calibrated model on the independent test partition.
+    print("\n=== Independent Test Set Evaluation (Calibrated) ===")
     y_pred = selected_pipeline.predict(X_test)
     y_proba = selected_pipeline.predict_proba(X_test)
     
@@ -247,17 +278,6 @@ def main():
     thresholds = np.arange(0.10, 0.91, 0.05)
     threshold_df = evaluator.threshold_analysis(y_validation, validation_proba, thresholds)
     print(threshold_df.round(4))
-
-    # 10. Cross-validation is restricted to training data; preprocessing is inside the pipeline.
-    print("\n=== Training-Only Stratified Cross-Validation ===")
-    cv_roc_auc = evaluator.cross_validate(
-        selected_pipeline.pipeline, X_train, y_train, cv=5, scoring="roc_auc"
-    )
-    cv_average_precision = evaluator.cross_validate(
-        selected_pipeline.pipeline, X_train, y_train, cv=5, scoring="average_precision"
-    )
-    print(f"ROC-AUC: {cv_roc_auc['mean']:.4f} +/- {cv_roc_auc['std']:.4f}")
-    print(f"Average precision: {cv_average_precision['mean']:.4f} +/- {cv_average_precision['std']:.4f}")
 
     # 11. Final-test diagnostics at the unchanged 0.50 operating threshold.
     test_confusion, confusion_counts = evaluator.confusion_matrix_at_threshold(
@@ -284,7 +304,7 @@ def main():
     
     # 12. Explainability analysis
     print("\n=== Explainability Analysis ===")
-    explainer = ModelExplainer(selected_pipeline.pipeline, numerical_cols + categorical_cols)
+    explainer = ModelExplainer(base_pipeline, numerical_cols + categorical_cols)
     perm_importance = explainer.get_permutation_importance(X_test, y_test, n_repeats=5)
     print("Top 10 features by permutation importance:")
     print(perm_importance.head(10).to_string(index=False))
@@ -297,6 +317,10 @@ def main():
     
     metadata = {
         "test_metrics": test_metrics,
+        "selected_model": selected_model_type,
+        "model_selection_rationale": "Logistic Regression is retained as the initial operating candidate because recall is prioritised for retention screening. Candidate validation metrics remain visible; the final operating choice should be revisited using intervention costs and team capacity.",
+        "calibration_method": "sigmoid",
+        "calibration_training": "Five-fold cross-validation within the training partition only; validation and final test rows are excluded from calibrator fitting.",
         "model_comparison": comparison_df.reset_index().to_dict(orient="records"),
         "test_confusion_matrix": test_confusion.tolist(),
         "test_confusion_counts": confusion_counts,
