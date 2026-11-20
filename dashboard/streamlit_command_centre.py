@@ -711,9 +711,18 @@ def model_governance(metadata):
             "model", "roc_auc", "average_precision", "recall", "precision",
             "f1", "accuracy", "balanced_accuracy", "brier_score", "log_loss",
         ] if column in comparison_frame]
-        st.dataframe(comparison_frame[display_metrics].style.format({
-            column: "{:.1%}" for column in display_metrics if column != "model"
-        }), use_container_width=True, hide_index=True)
+        comparison_format = {
+            column: "{:.1%}" for column in [
+                "roc_auc", "average_precision", "recall", "precision",
+                "f1", "accuracy", "balanced_accuracy",
+            ] if column in display_metrics
+        }
+        comparison_format.update({
+            column: "{:.3f}" for column in ["brier_score", "log_loss"]
+            if column in display_metrics
+        })
+        st.dataframe(comparison_frame[display_metrics].style.format(comparison_format),
+                     use_container_width=True, hide_index=True)
         logistic = comparison_frame[comparison_frame["model"] == "logistic"]
         forest = comparison_frame[comparison_frame["model"] == "random_forest"]
         if not logistic.empty and not forest.empty:
