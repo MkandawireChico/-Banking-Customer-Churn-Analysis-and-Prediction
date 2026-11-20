@@ -13,6 +13,7 @@ import streamlit as st
 
 from src.modeling import ChurnModelPipeline
 from src.retention import RetentionRecommender, allocate_relationship_managers
+from src.case_management import build_starter_case_register, validate_case_register, add_case_monitoring_fields, CASE_STATUSES
 
 
 st.set_page_config(
@@ -617,6 +618,98 @@ def campaign_studio(data):
     st.caption("The export contains customer identifiers and should be handled as confidential banking information.")
 
 
+
+def retention_case_management(data):
+    page_header(
+        "Own  /  Follow up  /  Resolve",
+        "Retention Case Management",
+        "Turn risk signals into accountable customer cases, with clear ownership, next actions and follow-up control.",
+    )
+    if data is None or data.empty:
+        st.warning("Customer scoring data is unavailable. Run the production scoring pipeline first.")
+        return
+    st.info(
+        "Working register: import the latest CSV to resume work, edit cases below, then export the updated CSV. "
+        "This app does not currently write case changes to a permanent shared database."
+    )
+    starter = build_starter_case_register(data, limit=100)
+    st.download_button(
+        "Download starter case register (top 100 priority customers)",
+        starter.to_csv(index=False).encode("utf-8"),
+        "nyanja_retention_case_register_template.csv",
+        "text/csv",
+    )
+    upload = st.file_uploader("Upload current case register (CSV)", type=["csv"], key="retention_case_register_upload")
+    if upload is None:
+        st.caption("Download the starter file, complete ownership and dates, then upload it here to manage cases.")
+        return
+    try:
+        raw = pd.read_csv(upload, dtype={"Customer_ID": str})
+        cases = validate_case_register(raw)
+    except Exception as exc:
+        st.error(f"Case register could not be loaded: {exc}")
+        return
+
+    portfolio = data.copy()
+    portfolio["Customer_ID"] = portfolio["Customer_ID"].astype(str)
+    profile_fields = [c for c in [
+        "Customer_ID", "Churn_Probability", "Risk_Band", "Customer_Segment",
+        "Branch_Location", "Average_Monthly_Balance", "Days_Since_Last_Transaction",
+    ] if c in portfolio.columns]
+    cases = cases.merge(portfolio[profile_fields], on="Customer_ID", how="left", validate="many_to_one")
+    cases = add_case_monitoring_fields(cases)
+    k = st.columns(5)
+    k[0].metric("Cases in register", f"{len(cases):,}")
+    k[1].metric("Open cases", f"{int(cases['Case_Open'].sum()):,}")
+    k[2].metric("Overdue follow-ups", f"{int(cases['Follow_Up_Overdue'].sum()):,}")
+    k[3].metric("Unassigned cases", f"{int(cases['Assigned_Manager'].eq('').sum()):,}")
+    k[4].metric("Not matched to portfolio", f"{int(cases['Churn_Probability'].isna().sum()):,}")
+
+    status_filter = st.multiselect("Filter case status", CASE_STATUSES, default=CASE_STATUSES)
+    overdue_only = st.checkbox("Show overdue follow-ups only", value=False)
+    view = cases[cases["Case_Status"].isin(status_filter)].copy()
+    if overdue_only:
+        view = view[view["Follow_Up_Overdue"]]
+    if view.empty:
+        st.info("No cases match the current filters.")
+        return
+    section("Case workbench", "Edit case status, owner, follow-up date and latest interaction. Keep Case_ID and Customer_ID unique.")
+    editable_cols = [
+        "Case_ID", "Customer_ID", "Case_Status", "Assigned_Manager", "Next_Follow_Up",
+        "Last_Contact_Date", "Contact_Channel", "Latest_Outcome", "Resolution_Reason", "Case_Notes",
+    ]
+    edited = st.data_editor(
+        view[editable_cols], use_container_width=True, hide_index=True, num_rows="dynamic",
+        column_config={
+            "Case_Status": st.column_config.SelectboxColumn("Case status", options=CASE_STATUSES, required=True),
+            "Next_Follow_Up": st.column_config.DateColumn("Next follow-up", format="YYYY-MM-DD"),
+            "Last_Contact_Date": st.column_config.DateColumn("Last contact", format="YYYY-MM-DD"),
+        }, key="retention_case_editor",
+    )
+    try:
+        edited = validate_case_register(edited)
+        enriched = edited.merge(portfolio[profile_fields], on="Customer_ID", how="left", validate="many_to_one")
+        enriched = add_case_monitoring_fields(enriched)
+    except Exception as exc:
+        st.error(f"Please correct the case register before exporting: {exc}")
+        return
+    overdue = enriched[enriched["Follow_Up_Overdue"]]
+    if not overdue.empty:
+        st.warning(f"{len(overdue):,} open case(s) have a follow-up date before today.")
+        st.dataframe(overdue[[c for c in ["Case_ID", "Customer_ID", "Assigned_Manager", "Case_Status", "Next_Follow_Up", "Churn_Probability"] if c in overdue]],
+                     use_container_width=True, hide_index=True)
+    section("Risk context", "Churn scores are prioritisation signals, not confirmed future outcomes.")
+    risk_cols = [c for c in ["Case_ID", "Customer_ID", "Case_Status", "Assigned_Manager",
+        "Churn_Probability", "Risk_Band", "Branch_Location", "Next_Follow_Up", "Follow_Up_Overdue"] if c in enriched]
+    st.dataframe(enriched[risk_cols].sort_values("Churn_Probability", ascending=False, na_position="last").style.format(
+        {"Churn_Probability": "{:.1%}"}), use_container_width=True, hide_index=True)
+    st.download_button(
+        "Export updated case register", enriched.to_csv(index=False).encode("utf-8"),
+        "nyanja_retention_case_register_updated.csv", "text/csv",
+    )
+    st.caption("Case exports contain confidential banking information. Store them only in approved, access-controlled locations.")
+
+
 def prediction_lab():
     page_header("Scenario testing  /  Batch scoring",
                 "Prediction Lab",
@@ -986,7 +1079,7 @@ def main():
         page = st.radio(
             "WORKSPACE",
             ["Executive Overview", "Customer Intelligence", "Retention Prioritisation",
-             "Intervention Outcomes", "Retention Campaign Studio", "Prediction Lab", "Model Governance"],
+             "Intervention Outcomes", "Retention Campaign Studio", "Retention Case Management", "Prediction Lab", "Model Governance"],
             label_visibility="visible",
         )
         st.divider()
@@ -1006,6 +1099,8 @@ def main():
         intervention_outcomes(data)
     elif page == "Retention Campaign Studio":
         campaign_studio(data)
+    elif page == "Retention Case Management":
+        retention_case_management(data)
     elif page == "Prediction Lab":
         prediction_lab()
     else:
