@@ -73,6 +73,7 @@ def test_case_register_rejects_duplicate_ids_and_invalid_status():
         "Risk_Band": ["High Risk", "High Risk"],
     }))
     duplicate = pd.concat([starter, starter.iloc[[0]]], ignore_index=True)
+    duplicate.loc[len(duplicate) - 1, "Case_ID"] = "RET-99999"
     with pytest.raises(ValueError, match="Customer_ID values must be unique"):
         validate_case_register(duplicate)
     starter.loc[0, "Case_Status"] = "Unknown"
