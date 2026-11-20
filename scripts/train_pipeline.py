@@ -320,7 +320,7 @@ def main():
         "selected_model": selected_model_type,
         "model_selection_rationale": "Logistic Regression is retained as the initial operating candidate because recall is prioritised for retention screening. Candidate validation metrics remain visible; the final operating choice should be revisited using intervention costs and team capacity.",
         "calibration_method": "sigmoid",
-        "calibration_training": "Five-fold cross-validation within the training partition only; validation and final test rows are excluded from calibrator fitting.",
+        "calibration_training": "Five-fold cross-validation on the full training partition after validation-only design decisions; the independent final test partition is excluded from calibrator fitting.",
         "model_comparison": comparison_df.reset_index().to_dict(orient="records"),
         "test_confusion_matrix": test_confusion.tolist(),
         "test_confusion_counts": confusion_counts,
