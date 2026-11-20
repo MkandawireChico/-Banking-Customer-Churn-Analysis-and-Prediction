@@ -6,6 +6,7 @@ import pytest
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.calibration import CalibratedClassifierCV
 from src.modeling import ChurnModelPipeline, ModelEvaluator
 
 
@@ -124,6 +125,29 @@ def test_churn_model_pipeline_predict_proba(sample_data):
     assert proba.shape == (len(X), 2)
     assert np.allclose(proba.sum(axis=1), 1.0)  # Probabilities sum to 1
     assert (proba >= 0).all() and (proba <= 1).all()  # Valid probability range
+
+
+def test_calibrated_pipeline_wrapper_returns_valid_probabilities(sample_data):
+    """The saved model wrapper must support a calibrated sklearn estimator."""
+    numerical_cols = ["Age", "Monthly_Income"]
+    categorical_cols = ["Gender"]
+    X = sample_data[numerical_cols + categorical_cols]
+    y = sample_data["Churn"]
+
+    base = ChurnModelPipeline(model_type="logistic", random_state=42)
+    base.fit(X.iloc[:80], y.iloc[:80], numerical_cols, categorical_cols,
+             use_feature_engineering=False)
+    calibrated = CalibratedClassifierCV(
+        estimator=base.pipeline, method="sigmoid", cv=3
+    )
+    calibrated.fit(X.iloc[:80], y.iloc[:80])
+    base.pipeline = calibrated
+
+    probabilities = base.predict_proba(X.iloc[80:])
+    assert probabilities.shape == (20, 2)
+    assert np.allclose(probabilities.sum(axis=1), 1.0)
+    assert np.isfinite(probabilities).all()
+    assert ((probabilities >= 0) & (probabilities <= 1)).all()
 
 
 def test_churn_model_pipeline_random_forest(sample_data):

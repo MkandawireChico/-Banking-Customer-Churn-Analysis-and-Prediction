@@ -688,7 +688,8 @@ def model_governance(metadata):
         value = metrics.get(key)
         col.metric(label, f"{value:.1%}" if isinstance(value, (int, float)) else "—")
 
-    section("Held-out model scorecard", "All metrics below are calculated on the independent test split.")
+    selected_model = metadata.get("selected_model", "Selected candidate")
+    section("Held-out model scorecard", f"{selected_model.replace('_', ' ').title()} evaluated on the independent test split.")
     labels = {
         "roc_auc": "ROC-AUC", "average_precision": "Average precision",
         "accuracy": "Accuracy", "balanced_accuracy": "Balanced accuracy",
@@ -708,11 +709,20 @@ def model_governance(metadata):
         comparison_frame = pd.DataFrame(comparison)
         display_metrics = [column for column in [
             "model", "roc_auc", "average_precision", "recall", "precision",
-            "f1", "accuracy", "balanced_accuracy",
+            "f1", "accuracy", "balanced_accuracy", "brier_score", "log_loss",
         ] if column in comparison_frame]
-        st.dataframe(comparison_frame[display_metrics].style.format({
-            column: "{:.1%}" for column in display_metrics if column != "model"
-        }), use_container_width=True, hide_index=True)
+        comparison_format = {
+            column: "{:.1%}" for column in [
+                "roc_auc", "average_precision", "recall", "precision",
+                "f1", "accuracy", "balanced_accuracy",
+            ] if column in display_metrics
+        }
+        comparison_format.update({
+            column: "{:.3f}" for column in ["brier_score", "log_loss"]
+            if column in display_metrics
+        })
+        st.dataframe(comparison_frame[display_metrics].style.format(comparison_format),
+                     use_container_width=True, hide_index=True)
         logistic = comparison_frame[comparison_frame["model"] == "logistic"]
         forest = comparison_frame[comparison_frame["model"] == "random_forest"]
         if not logistic.empty and not forest.empty:
@@ -720,9 +730,12 @@ def model_governance(metadata):
             st.caption(
                 f"Logistic Regression recall: {lr['recall']:.1%}; Random Forest recall: {rf['recall']:.1%}. "
                 f"Logistic Regression F1: {lr['f1']:.1%}; Random Forest F1: {rf['f1']:.1%}. "
-                "The operating choice depends on the relative cost of missed churners and unnecessary outreach; "
-                "neither model is universally best on every metric."
+                "Compare average precision and probability-loss metrics alongside recall. "
+                "The operating choice depends on missed-churn costs, unnecessary outreach and team capacity."
             )
+        rationale = metadata.get("model_selection_rationale")
+        if rationale:
+            st.info(rationale)
 
     confusion = metadata.get("test_confusion_matrix")
     if confusion and len(confusion) == 2:
@@ -801,6 +814,10 @@ def model_governance(metadata):
     calibration = metadata.get("calibration_curve", {})
     if calibration.get("prob_true") and calibration.get("prob_pred"):
         section("Probability calibration", "Observed churn frequency versus average predicted probability within fixed-width bins.")
+        method = metadata.get("calibration_method")
+        if method:
+            st.caption(f"Probability calibration: {method.title()} method. " +
+                       metadata.get("calibration_training", ""))
         observed = calibration["prob_true"]
         predicted = calibration["prob_pred"]
         fig, ax = plt.subplots(figsize=(7, 3.5))
@@ -830,6 +847,11 @@ def model_governance(metadata):
     ece = metadata.get("calibration_ece")
     if ece is not None:
         st.metric("Expected calibration error", f"{ece:.3f}")
+        if ece >= 0.10:
+            st.warning(
+                "Calibration error remains material. Treat scores primarily as a ranking and "
+                "prioritisation aid, not as precise individual churn probabilities."
+            )
 
     section("Responsible operating controls")
     controls = [
