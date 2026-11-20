@@ -47,18 +47,13 @@ All financial values are presented in Malawi Kwacha (MWK).
 
 ## Model performance
 
-The selected Logistic Regression model was evaluated against a majority-class baseline and Random Forest on a held-out test set.
+The training workflow compares a majority-class baseline, Logistic Regression and Random Forest on a validation split drawn only from the training partition. The final test partition is reserved for the selected candidate's independent evaluation.
 
-| Metric | Majority baseline | Logistic Regression | Random Forest |
-|---|---:|---:|---:|
-| Accuracy | 87.45% | 67.77% | 75.08% |
-| Precision | 0.00% | 22.71% | 26.32% |
-| Recall | 0.00% | **65.29%** | 54.78% |
-| F1 score | 0.00% | 33.70% | 35.56% |
-| ROC-AUC | 0.500 | **0.742** | 0.731 |
+Logistic Regression remains the initial operating candidate because the retention-screening use case places value on identifying a larger share of potential churners. This is not a claim that it is universally superior: Random Forest can achieve stronger precision or F1, and the validation scorecard exposes the trade-offs. Average precision, recall, precision, F1, Brier score and log loss should be considered together.
 
-**Why Logistic Regression?** The project prioritises identifying a useful share of potential churners for review. The selected model achieves 65.3% recall on the held-out test set, with a 22.7% precision trade-off. This means a substantial share of flagged customers may not churn; outreach capacity, intervention cost and customer experience therefore matter when setting an operating threshold.
+The production pipeline applies sigmoid probability calibration using five-fold cross-validation within the training partition. Neither the validation rows nor the final test rows are used to fit the calibrator. Calibration quality is then measured on the independent test set using Brier score, log loss, a calibration curve and expected calibration error (ECE). A high ECE is surfaced as a governance warning: scores should then be treated as relative prioritisation signals rather than precise individual probabilities.
 
+The operating model and threshold should ultimately be selected using the bank's intervention costs, the cost of missed churners and available relationship-team capacity—not accuracy alone.
 ### Risk-band validation
 
 | Risk band | Observed churn rate on test set |
