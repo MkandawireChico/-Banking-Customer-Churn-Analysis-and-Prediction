@@ -1,195 +1,100 @@
-# Reproducibility Guide
+# Reproducibility and Model Operations
 
-This document describes how to reproduce the results in this project.
+This guide describes how to regenerate the controlled customer cohort, train the churn model and review the resulting artefacts.
 
-## Environment Setup
+## Environment
 
-### Python Version
-- Python 3.10 or higher recommended
+Use Python 3.10, 3.11 or 3.12, then install the pinned project dependencies:
 
-### Dependencies
-Install dependencies from `requirements.txt`:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Key Dependencies
-- pandas: Data manipulation
-- numpy: Numerical computing
-- scikit-learn: Machine learning
-- joblib: Model serialization
-- streamlit: Prediction interface
-- pytest: Testing
-- shap: Model explainability (optional)
+## 1. Generate the source cohort
 
-## Data Generation
-
-The reproducible customer dataset is generated using `scripts/generate_dataset.py`. Run the command from the repository root:
 ```bash
 python scripts/generate_dataset.py
 ```
 
-The script resolves its default output path from its own location, so it can also be invoked from another working directory. Optional arguments allow a different seed, population size or output destination:
+The generator uses a fixed default seed and creates `data/raw/churn_customers_synthetic.csv`. Optional arguments can change the seed, population size or output path:
+
 ```bash
 python scripts/generate_dataset.py --seed 42 --rows 20000
-python scripts/generate_dataset.py --output /path/to/customer_data.csv
 ```
 
-This creates:
-- `data/raw/churn_customers_synthetic.csv` - Raw synthetic data with injected quality issues
+The generated records include controlled data-quality issues so the validation and cleaning steps can be demonstrated. They are synthetic and do not represent real bank customers.
 
-**Random Seed:** The generator uses a fixed random seed (42) for reproducibility.
+## 2. Train and evaluate the model
 
-## Model Training
-
-Train the model using the modular pipeline:
 ```bash
 python scripts/train_pipeline.py
 ```
 
-This script:
-1. Loads raw data
-2. Validates data quality
-3. Cleans data (removes duplicates, fixes outliers, winsorizes income)
-4. Performs feature engineering (leakage-safe)
-5. Splits data (75/25 stratified train/test)
-6. Compares models (baseline, logistic regression, random forest)
-7. Trains selected model (logistic regression)
-8. Evaluates on test set
-9. Performs threshold and capacity analysis
-10. Runs explainability analysis
-11. Generates retention analysis
-12. Saves artifacts
+The canonical pipeline:
 
-### Artifacts Generated
-- `models/logistic_regression_pipeline.joblib` - Trained model with metadata
-- `data/processed/churn_predictions.csv` - Held-out test predictions with risk bands for model evaluation
-- `data/processed/churn_customer_scores.csv` - Full-population churn scores for dashboard monitoring and outreach prioritisation
-- `data/processed/churn_customers_clean.csv` - Cleaned customer dataset
+1. Validates the raw data and reports quality issues.
+2. Removes duplicate customer IDs, standardises categories and handles implausible values.
+3. Leaves missing-value imputation inside the model pipeline.
+4. Creates a stratified training and independent test split.
+5. Uses a validation subset of the training partition for candidate comparison and threshold scenarios.
+6. Retains Logistic Regression as the initial recall-oriented operating candidate.
+7. Fits a sigmoid calibrator using five-fold cross-validation within the full training partition.
+8. Evaluates the calibrated model once on the untouched test partition.
+9. Calculates discrimination, classification, calibration, capacity and subgroup diagnostics.
+10. Saves the model, metadata, test predictions, cleaned data and full-population scores.
 
-### Random Seed
-The training script uses `random_state=42` by default for reproducibility.
+The final test partition is not used for model selection, threshold selection or calibrator fitting.
 
-## Model Performance (Test Set)
+## 3. Understand the generated artefacts
 
-When run with the default random seed, the model achieves:
+| Artefact | Purpose |
+|---|---|
+| `models/logistic_regression_pipeline.joblib` | Current calibrated pipeline and its metadata |
+| `data/processed/churn_customers_clean.csv` | Cleaned customer profiles |
+| `data/processed/churn_predictions.csv` | Held-out test predictions with actual outcomes |
+| `data/processed/churn_customer_scores.csv` | Full-population scores for portfolio prioritisation |
 
-| Metric | Value |
-|--------|-------|
-| Accuracy | 0.6777 |
-| Precision | 0.2271 |
-| Recall | 0.6529 |
-| F1 Score | 0.3370 |
-| ROC-AUC | 0.7417 |
-| Average Precision | 0.3534 |
-| Log Loss | 0.5949 |
-| Brier Score | 0.2055 |
+**Important:** the full-population score file includes records from the model's training cohort. It is an operational portfolio-scoring output, not an independent evaluation sample. Report model performance from the held-out test predictions and saved model metadata.
 
-### Baseline Comparison
-The baseline (always predicts "no churn") achieves:
-- Accuracy: 0.8745
-- Recall: 0.0000
-- ROC-AUC: 0.5000
+The model metadata contains the test metrics, candidate comparison, confusion matrix, validation-only threshold analysis, cross-validation results, subgroup diagnostics, capacity analysis and calibration evidence. The dashboard and notebook read these saved results rather than relying on stale hard-coded metric values.
 
-Our model achieves 65.3% recall, identifying 65% of churned customers.
+## 4. Review the notebook
 
-### Risk Band Calibration
-- Low Risk: 3.9% observed churn rate
-- Medium Risk: 12.1% observed churn rate
-- High Risk: 33.1% observed churn rate
+Open `notebooks/customer_churn_analysis.ipynb` after generating the data and training artefacts. It provides:
 
-### Permutation Importance (Top 5)
-1. Days_Since_Last_Transaction: 7.4%
-2. Account_Tenure_Months: 5.3%
-3. Number_of_Complaints: 4.1%
-4. Number_of_Products: 2.9%
-5. Average_Monthly_Deposit: 1.0%
+- Data integrity and missingness checks.
+- Portfolio-level and segment-level exploratory analysis.
+- Behavioural churn patterns.
+- A review of validation-only candidate comparison.
+- Independent test metrics and confusion-matrix diagnostics.
+- Risk-band outcome checks and calibration review.
+- A clear separation between held-out evaluation and full-population scores.
 
-## Running Tests
+The notebook is intentionally not a second, competing model-training implementation. The modular script in `scripts/train_pipeline.py` is the source of truth for model training and saved production artefacts.
 
-Run the test suite:
+## 5. Run the application and tests
+
 ```bash
 pytest tests/ -v
-```
-
-Run with coverage:
-```bash
-pytest tests/ --cov=src --cov-report=term-missing
-```
-
-## Prediction Interface
-
-Launch the Streamlit prediction interface:
-```bash
-streamlit run app.py
-```
-
-This provides:
-- Single customer prediction
-- Batch prediction from CSV upload
-- Model information display
-
-## Interactive Retention Command Centre
-
-Launch the five-workspace Streamlit analytics application:
-```bash
 streamlit run dashboard/streamlit_command_centre.py
 ```
 
-The application reads the cleaned customer export and full-population score file generated by the training pipeline. Held-out test predictions are retained separately for independent performance reporting. It provides an executive portfolio overview, customer intelligence filters, a capacity-constrained retention queue, batch prediction uploads and model governance metrics. Monetary values are shown in MWK.
+The Streamlit app reads the processed customer and score exports plus the saved model bundle. The Campaign Studio and Case Management workspaces support CSV export/import handoffs; they do not currently persist records to a shared CRM database.
 
-The original single/batch prediction interface remains available with:
-```bash
-streamlit run app.py
-```
+## 6. Controlled GitHub refresh
 
-## Power BI Dashboard
+A manual workflow is available at:
 
-See `dashboard/powerbi_dashboard_guide.md` for the Power BI specification and implementation notes.
+[Refresh production model](https://github.com/MkandawireChico/-Banking-Customer-Churn-Analysis-and-Prediction/actions/workflows/refresh-production-model.yml)
 
-## Important Notes
+It requires a deliberate confirmation before regenerating and committing model artefacts. It is not configured to retrain automatically on every push.
 
-### Data Leakage Prevention
-- Feature engineering uses training-set-only statistics
-- Normalization parameters are fit on training data only
-- No information from test set is used during training
+## Interpretation safeguards
 
-### Data and intended use
-- Customer records and outcomes are generated for a controlled analytics demonstration and do not represent real customer accounts.
-- The bank name and branch labels provide context for the Malawi-focused scenario.
-- Validate data quality, fairness, calibration and performance on representative real-world data before any operational use.
-
-### Reproducibility Checklist
-- [ ] Use Python 3.10+
-- [ ] Install all dependencies from requirements.txt
-- [ ] Run data generation with default seed (42)
-- [ ] Run training script with default random_state (42)
-- [ ] Verify model metrics match documented values
-- [ ] Run tests to verify code correctness
-
-## Troubleshooting
-
-### Import Errors
-Ensure you're running from the project root directory:
-```bash
-cd banking-customer-churn-analysis
-```
-
-### Model Not Found
-Run the training script first to generate the model:
-```bash
-python scripts/train_pipeline.py
-```
-
-### Test Failures
-Ensure all dependencies are installed:
-```bash
-pip install -r requirements.txt
-```
-
-### Streamlit Errors
-Ensure the model exists before launching the app:
-```bash
-python scripts/train_pipeline.py
-streamlit run app.py
-```
+- Accuracy alone is inadequate for an imbalanced churn problem.
+- Precision, recall, F1, ROC-AUC and average precision describe different aspects of model performance.
+- Brier score, log loss, calibration curves and ECE help assess probability quality.
+- A high ECE should trigger caution: use scores as relative ranking signals rather than precise individual probabilities.
+- Risk bands are prioritisation aids, not guarantees.
+- Descriptive patterns in synthetic data are not causal evidence.
+- Real deployment requires representative authorised data, privacy controls, fairness review, monitoring and human oversight.
