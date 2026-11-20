@@ -12,7 +12,28 @@ import pandas as pd
 import streamlit as st
 
 from src.modeling import ChurnModelPipeline
-from src.retention import RetentionRecommender, allocate_relationship_managers
+from src.retention import RetentionRecommender
+
+# Keep campaign allocation available if a deployment is temporarily running an
+# older src.retention module than the dashboard checkout.
+try:
+    from src.retention import allocate_relationship_managers
+except ImportError:
+    def allocate_relationship_managers(queue, managers, owner_col="Assigned_Manager"):
+        """Evenly distribute a ranked queue across unique manager names."""
+        cleaned = [str(name).strip() for name in managers if str(name).strip()]
+        if not cleaned:
+            raise ValueError("At least one relationship manager is required.")
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("Relationship manager names must be unique.")
+        result = queue.copy().reset_index(drop=True)
+        if not result.empty:
+            result[owner_col] = [
+                cleaned[index % len(cleaned)] for index in range(len(result))
+            ]
+        else:
+            result[owner_col] = pd.Series(dtype="object")
+        return result
 from src.case_management import build_starter_case_register, validate_case_register, add_case_monitoring_fields, CASE_STATUSES
 
 
