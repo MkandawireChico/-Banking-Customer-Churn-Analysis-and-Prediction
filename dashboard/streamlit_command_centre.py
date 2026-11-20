@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 
 from src.modeling import ChurnModelPipeline
-from src.retention import RetentionRecommender
+from src.retention import RetentionRecommender, allocate_relationship_managers
 
 
 st.set_page_config(
@@ -514,6 +514,109 @@ def retention_prioritisation(data):
         st.info("Increase the campaign budget or reduce the estimated cost per contact to fund outreach.")
 
 
+def campaign_studio(data):
+    page_header(
+        "Plan  /  Assign  /  Activate",
+        "Retention Campaign Studio",
+        "Build a targeted outreach campaign, balance work across relationship teams and export an execution-ready contact list.",
+    )
+    if data is None or data.empty:
+        st.warning("Full customer scoring data is unavailable. Run the production scoring pipeline first.")
+        return
+
+    st.caption(
+        "Campaigns created here are planning exports. Assignments are not saved to a live CRM or "
+        "customer system; upload actual contact outcomes in Intervention Outcomes after outreach."
+    )
+    left, right = st.columns(2)
+    campaign_name = left.text_input("Campaign name", value="Priority retention outreach")
+    channel = right.selectbox(
+        "Primary contact channel",
+        ["Relationship manager call", "Branch appointment", "SMS", "Email", "Digital banking message"],
+    )
+    segments = sorted(data["Customer_Segment"].dropna().astype(str).unique()) if "Customer_Segment" in data else []
+    branches = sorted(data["Branch_Location"].dropna().astype(str).unique()) if "Branch_Location" in data else []
+    c1, c2, c3 = st.columns(3)
+    selected_segments = c1.multiselect("Target customer segments", segments, default=segments)
+    selected_branches = c2.multiselect("Target branches", branches, default=branches)
+    risk_options = ["High Risk", "Medium Risk", "Low Risk"]
+    selected_risks = c3.multiselect("Risk bands", risk_options, default=["High Risk", "Medium Risk"])
+
+    c4, c5, c6 = st.columns(3)
+    minimum_score = c4.slider("Minimum churn score", 0, 100, 33, 1) / 100
+    capacity = c5.number_input("Maximum campaign contacts", min_value=1, max_value=20000,
+                                value=min(500, len(data)), step=25)
+    contact_date = c6.date_input("Planned contact date")
+
+    managers_raw = st.text_input(
+        "Relationship managers / teams (comma-separated)",
+        value="Team A, Team B, Team C",
+        help="Replace these labels with the actual authorised team or manager names before exporting.",
+    )
+    managers = list(dict.fromkeys(name.strip() for name in managers_raw.split(",") if name.strip()))
+
+    eligible = data.copy()
+    if "Customer_Segment" in eligible:
+        eligible = eligible[eligible["Customer_Segment"].astype(str).isin(selected_segments)]
+    if "Branch_Location" in eligible:
+        eligible = eligible[eligible["Branch_Location"].astype(str).isin(selected_branches)]
+    eligible = eligible[
+        eligible["Risk_Band"].isin(selected_risks)
+        & (eligible["Churn_Probability"] >= minimum_score)
+    ]
+    if not data["Score_Scope"].iloc[0].startswith("Full population"):
+        st.warning("The source scores cover only a held-out test cohort. Do not use this as a full-population campaign list.")
+
+    st.metric("Eligible customers", f"{len(eligible):,}")
+    if not campaign_name.strip():
+        st.error("Enter a campaign name before creating the export.")
+        return
+    if not managers:
+        st.error("Enter at least one relationship manager or team.")
+        return
+    if eligible.empty:
+        st.info("No customers match the selected campaign criteria.")
+        return
+
+    queue = RetentionRecommender().create_outreach_queue(eligible, capacity=int(capacity))
+    queue = allocate_relationship_managers(queue, managers)
+    queue["Campaign_Name"] = campaign_name.strip()
+    queue["Contact_Channel"] = channel
+    queue["Planned_Contact_Date"] = str(contact_date)
+
+    summary = queue.groupby("Assigned_Manager").agg(
+        Assigned_Customers=("Customer_ID", "nunique"),
+        Average_Churn_Score=("Churn_Probability", "mean"),
+        High_Risk_Customers=("Risk_Band", lambda values: int((values == "High Risk").sum())),
+    ).reset_index()
+    k = st.columns(4)
+    k[0].metric("Campaign contacts", f"{len(queue):,}")
+    k[1].metric("Managers / teams", f"{len(managers):,}")
+    k[2].metric("Highest individual workload", f"{summary['Assigned_Customers'].max():,}")
+    k[3].metric("Average queue score", f"{queue['Churn_Probability'].mean():.1%}")
+
+    section("Balanced manager workload", "Customers are allocated in ranked order, with workloads differing by at most one.")
+    st.dataframe(summary.style.format({"Average_Churn_Score": "{:.1%}"}),
+                 use_container_width=True, hide_index=True)
+    section("Campaign execution list", "Review the proposed assignments before sharing with authorised teams.")
+    display = [column for column in [
+        "Outreach_Rank", "Customer_ID", "Assigned_Manager", "Campaign_Name",
+        "Contact_Channel", "Planned_Contact_Date", "Risk_Band", "Churn_Probability",
+        "priority", "recommended_action", "Customer_Segment", "Branch_Location",
+        "Days_Since_Last_Transaction", "Number_of_Complaints", "Average_Monthly_Balance",
+    ] if column in queue.columns]
+    st.dataframe(queue[display].style.format({
+        "Churn_Probability": "{:.1%}", "Average_Monthly_Balance": "MWK {:,.0f}"
+    }), use_container_width=True, hide_index=True)
+    st.download_button(
+        "Export campaign execution list",
+        queue.to_csv(index=False).encode("utf-8"),
+        "nyanja_retention_campaign_execution.csv",
+        "text/csv",
+    )
+    st.caption("The export contains customer identifiers and should be handled as confidential banking information.")
+
+
 def prediction_lab():
     page_header("Scenario testing  /  Batch scoring",
                 "Prediction Lab",
@@ -883,7 +986,7 @@ def main():
         page = st.radio(
             "WORKSPACE",
             ["Executive Overview", "Customer Intelligence", "Retention Prioritisation",
-             "Intervention Outcomes", "Prediction Lab", "Model Governance"],
+             "Intervention Outcomes", "Retention Campaign Studio", "Prediction Lab", "Model Governance"],
             label_visibility="visible",
         )
         st.divider()
@@ -901,6 +1004,8 @@ def main():
         retention_prioritisation(data)
     elif page == "Intervention Outcomes":
         intervention_outcomes(data)
+    elif page == "Retention Campaign Studio":
+        campaign_studio(data)
     elif page == "Prediction Lab":
         prediction_lab()
     else:

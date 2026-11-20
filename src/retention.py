@@ -311,6 +311,29 @@ class RetentionRecommender:
         return df
 
 
+def allocate_relationship_managers(
+    queue: pd.DataFrame,
+    managers: List[str],
+    owner_col: str = "Assigned_Manager",
+) -> pd.DataFrame:
+    """Assign a ranked outreach queue evenly across named relationship managers.
+
+    The input order is preserved, so higher-ranked customers are assigned first.
+    This is a workload allocation aid, not a record of actual assignment.
+    """
+    cleaned = [str(name).strip() for name in managers if str(name).strip()]
+    if not cleaned:
+        raise ValueError("At least one relationship manager is required.")
+    if len(set(cleaned)) != len(cleaned):
+        raise ValueError("Relationship manager names must be unique.")
+    result = queue.copy().reset_index(drop=True)
+    if not result.empty:
+        result[owner_col] = [cleaned[index % len(cleaned)] for index in range(len(result))]
+    else:
+        result[owner_col] = pd.Series(dtype="object")
+    return result
+
+
 def generate_retention_report(
     df: pd.DataFrame,
     probability_col: str = 'Churn_Probability',
