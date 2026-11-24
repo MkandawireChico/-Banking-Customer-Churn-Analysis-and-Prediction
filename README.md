@@ -156,7 +156,7 @@ Clone the repository and install its dependencies:
 
 ```bash
 git clone https://github.com/MkandawireChico/-Banking-Customer-Churn-Analysis-and-Prediction.git
-cd -Banking-Customer-Churn-Analysis-and-Prediction
+cd ./-Banking-Customer-Churn-Analysis-and-Prediction
 python -m venv .venv
 # Activate the environment, then:
 pip install -r requirements.txt
